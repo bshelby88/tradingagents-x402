@@ -59,3 +59,7 @@ Every successful 200 emits `[LEDGER] {...}` to stdout. Captured by `fly logs`. T
 ## License
 
 ISC for this wrapper. TradingAgents itself ships under its own license — see `engine/LICENSE` after vendoring.
+
+---
+
+Part of the [Royal Agentic x402 portfolio](https://bshelby88.github.io/x402-portfolio/) — seven paid x402 APIs on Base mainnet.
