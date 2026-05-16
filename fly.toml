@@ -1,0 +1,38 @@
+app = "tradingagents-x402"
+primary_region = "dfw"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  TRADINGAGENTS_DIR = "/app/TradingAgents"
+  PYTHON_BIN = "python3"
+  TRADINGAGENTS_LLM_PROVIDER = "anthropic"
+  TRADINGAGENTS_DEEP_THINK_LLM = "claude-haiku-4-5-20251001"
+  TRADINGAGENTS_QUICK_THINK_LLM = "claude-haiku-4-5-20251001"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 4
+    hard_limit = 8
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
+  cpus = 2

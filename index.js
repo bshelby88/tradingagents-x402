@@ -1,0 +1,242 @@
+const express = require("express");
+const { spawn } = require("node:child_process");
+const { paymentMiddleware } = require("@x402/express");
+const { x402ResourceServer, HTTPFacilitatorClient } = require("@x402/core/server");
+const { ExactEvmScheme } = require("@x402/evm/exact/server");
+const { declareDiscoveryExtension } = require("@x402/extensions/bazaar");
+
+const PAY_TO = process.env.X402_PAY_TO;
+if (!PAY_TO) {
+  console.error("FATAL: X402_PAY_TO env var required (Base USDC receive address)");
+  process.exit(1);
+}
+
+const TRADINGAGENTS_DIR = process.env.TRADINGAGENTS_DIR || "/app/TradingAgents";
+const PYTHON = process.env.PYTHON_BIN || "python3";
+const ANALYZE_SCRIPT = process.env.ANALYZE_SCRIPT || "/app/analyze.py";
+
+// CDP secret base64 hop
+if (process.env.CDP_API_KEY_SECRET_B64) {
+  process.env.CDP_API_KEY_SECRET = Buffer.from(process.env.CDP_API_KEY_SECRET_B64, "base64").toString("utf-8");
+}
+
+const HAS_CDP = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
+const NETWORK = HAS_CDP ? "eip155:8453" : "eip155:84532";
+
+let facilitatorClient;
+if (HAS_CDP) {
+  const { facilitator } = require("@coinbase/x402");
+  facilitatorClient = new HTTPFacilitatorClient(facilitator);
+  console.log("→ Coinbase CDP facilitator (Base mainnet, real USDC)");
+} else {
+  facilitatorClient = new HTTPFacilitatorClient({ url: "https://x402.org/facilitator" });
+  console.log("→ public x402.org facilitator (Base Sepolia testnet — set CDP_API_KEY_ID/SECRET to switch to mainnet)");
+}
+
+const x402Server = new x402ResourceServer(facilitatorClient);
+x402Server.register(NETWORK, new ExactEvmScheme());
+
+const app = express();
+app.use(express.json({ limit: "2mb" }));
+
+app.get("/health", (_req, res) =>
+  res.json({
+    status: "ok",
+    service: "tradingagents-x402",
+    provider: process.env.TRADINGAGENTS_LLM_PROVIDER || "anthropic",
+    deep: process.env.TRADINGAGENTS_DEEP_THINK_LLM || "claude-haiku-4-5-20251001",
+  }),
+);
+
+app.get("/about", (_req, res) =>
+  res.json({
+    service: "TradingAgents — Multi-agent LLM ticker consensus",
+    operator: "Royal Agentic Enterprises",
+    description:
+      "Pay $1.00 USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).",
+    docs: "https://github.com/TauricResearch/TradingAgents",
+    contact: "jadedfocus@gmail.com",
+  }),
+);
+
+const PRICE = "$1.00";
+
+app.use(
+  paymentMiddleware(
+    {
+      "POST /api/analyze-ticker": {
+        accepts: {
+          scheme: "exact",
+          price: PRICE,
+          network: NETWORK,
+          payTo: PAY_TO,
+        },
+        description:
+          "Run a full multi-agent analysis for any publicly traded ticker. Body: { ticker: string, date?: 'YYYY-MM-DD' (defaults to today), analysts?: string[] (default ['market','social','news','fundamentals']) }. Returns final BUY/HOLD/SELL decision, confidence, structured rationale, and per-agent reports. Uses Claude Haiku 4.5 for cost-efficient deep+quick reasoning; debate rounds=1, risk rounds=1. End-to-end latency typically 60-180s. Not financial advice — research output only.",
+        mimeType: "application/json",
+        extensions: {
+          ...declareDiscoveryExtension({
+            output: {
+              example: {
+                ok: true,
+                ticker: "NVDA",
+                date: "2026-05-15",
+                decision: "BUY",
+                confidence: "high",
+                summary: "Strong fundamentals, bullish momentum, positive sentiment despite macro headwinds.",
+                reports: {
+                  fundamentals: "Q1 earnings beat by 12%...",
+                  sentiment: "StockTwits bull/bear ratio 3.2:1...",
+                  news: "Data-center capex guidance upgraded...",
+                  technical: "Above 50/200 SMA, RSI 62...",
+                  trader_plan: "Long entry $920, target $1080, stop $880",
+                  risk_review: "Position size capped at 3% portfolio",
+                },
+              },
+              schema: {
+                $schema: "https://json-schema.org/draft/2020-12/schema",
+                type: "object",
+                properties: {
+                  input: {
+                    type: "object",
+                    properties: {
+                      type: { type: "string", const: "http" },
+                      method: { type: "string", enum: ["POST"] },
+                      bodyFields: {
+                        type: "object",
+                        properties: {
+                          ticker: { type: "string", description: "Stock symbol (e.g. NVDA, AAPL)" },
+                          date: {
+                            type: "string",
+                            description: "YYYY-MM-DD, optional — defaults to today UTC",
+                          },
+                          analysts: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                              enum: ["market", "social", "news", "fundamentals"],
+                            },
+                          },
+                        },
+                        required: ["ticker"],
+                      },
+                    },
+                    required: ["type", "method", "bodyFields"],
+                  },
+                  output: {
+                    type: "object",
+                    properties: {
+                      type: { type: "string" },
+                      example: {
+                        type: "object",
+                        properties: {
+                          ok: { type: "boolean" },
+                          ticker: { type: "string" },
+                          date: { type: "string" },
+                          decision: { type: "string", enum: ["BUY", "HOLD", "SELL"] },
+                          confidence: { type: "string" },
+                          summary: { type: "string" },
+                          reports: { type: "object" },
+                          error: { type: "string" },
+                        },
+                        required: ["ok"],
+                      },
+                    },
+                  },
+                },
+                required: ["input"],
+              },
+            },
+          }),
+        },
+      },
+    },
+    x402Server,
+  ),
+);
+
+function runAnalyze({ ticker, date, analysts }) {
+  return new Promise((resolve, reject) => {
+    const args = [ANALYZE_SCRIPT, "--ticker", ticker];
+    if (date) args.push("--date", date);
+    if (analysts && analysts.length) args.push("--analysts", analysts.join(","));
+
+    const env = { ...process.env, PYTHONUNBUFFERED: "1" };
+    const child = spawn(PYTHON, args, { env, cwd: TRADINGAGENTS_DIR });
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => (stdout += d.toString()));
+    child.stderr.on("data", (d) => (stderr += d.toString()));
+
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("analysis timed out after 300s"));
+    }, 300000);
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        return reject(new Error(`analyze.py exit ${code}: ${stderr.slice(-2000)}`));
+      }
+      try {
+        const lines = stdout.trim().split("\n");
+        const lastJson = lines.reverse().find((l) => l.trim().startsWith("{"));
+        if (!lastJson) return reject(new Error("no JSON output from analyzer"));
+        resolve(JSON.parse(lastJson));
+      } catch (e) {
+        reject(new Error(`bad JSON from analyzer: ${e.message}`));
+      }
+    });
+  });
+}
+
+// Ledger: emit one [LEDGER] line to stdout per successful paid call (captured by fly logs)
+app.use((req, res, next) => {
+  if (req.method !== "POST" || !req.path.startsWith("/api/")) return next();
+  const t0 = Date.now();
+  const origJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode === 200) {
+      try {
+        console.log(`[LEDGER] ${JSON.stringify({
+          ts: new Date().toISOString(),
+          app: "tradingagents-x402",
+          endpoint: req.path,
+          price_usdc: "$1.00",
+          network: NETWORK,
+          pay_to: PAY_TO,
+          ok: Boolean(body && body.ok),
+          latency_ms: Date.now() - t0,
+        })}`);
+      } catch (_) {}
+    }
+    return origJson(body);
+  };
+  next();
+});
+
+app.post("/api/analyze-ticker", async (req, res) => {
+  const { ticker, date, analysts } = req.body || {};
+  if (!ticker || typeof ticker !== "string" || !/^[A-Za-z0-9.\-]{1,10}$/.test(ticker)) {
+    return res.status(400).json({ ok: false, error: "invalid ticker" });
+  }
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ ok: false, error: "date must be YYYY-MM-DD" });
+  }
+  if (analysts && (!Array.isArray(analysts) || analysts.some((a) => typeof a !== "string"))) {
+    return res.status(400).json({ ok: false, error: "analysts must be array of strings" });
+  }
+  try {
+    const result = await runAnalyze({ ticker: ticker.toUpperCase(), date, analysts });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error("analyze failure:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+const PORT = Number(process.env.PORT) || 3000;
+app.listen(PORT, () => {
+  console.log(`tradingagents-x402 listening on :${PORT} (network=${NETWORK}, price=${PRICE})`);
+});
