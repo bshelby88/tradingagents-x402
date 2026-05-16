@@ -1,0 +1,80 @@
+name: x402 daily Bazaar self-ping
+
+# Verifies all 7 x402 endpoints daily:
+#   1. /health returns 200 (wakes suspended Fly machines)
+#   2. POST /api/* returns 402 with payment-required header
+#   3. Decoded 402 metadata matches expected network (Base mainnet) + amount
+# Fails workflow on drift → GitHub emails the repo owner automatically.
+
+on:
+  schedule:
+    - cron: '37 9 * * *'   # daily 09:37 UTC, off-minute to dodge fleet collisions
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Health + 402 drift check (7 apps)
+        run: |
+          set -uo pipefail
+          declare -a ENTRIES=(
+            "sentry-forge-x402   /api/dispute-pack       500000"
+            "nanobanana-x402     /api/generate-image      20000"
+            "vault-pro-x402      /api/scaffold-project    50000"
+            "power-pack-x402     /api/score-email         10000"
+            "royal-ruby-x402     /api/law-lookup          50000"
+            "suprapack-x402      /api/find-skill          10000"
+            "tradingagents-x402  /api/analyze-ticker    1000000"
+          )
+          FAIL=0
+          for entry in "${ENTRIES[@]}"; do
+            read -r app endpoint expected_amount <<< "$entry"
+            url="https://$app.fly.dev"
+
+            health=$(curl -sS -m 30 -o /dev/null -w "%{http_code}" "$url/health" || echo "ERR")
+            if [ "$health" != "200" ]; then
+              echo "::error::$app — health=$health"
+              FAIL=1
+              continue
+            fi
+
+            hdr=$(curl -sS -m 15 -I -X POST "$url$endpoint" \
+              -H 'content-type: application/json' 2>/dev/null \
+              | grep -i '^payment-required:' | awk '{print $2}' | tr -d '\r')
+            if [ -z "$hdr" ]; then
+              echo "::error::$app — no payment-required header"
+              FAIL=1
+              continue
+            fi
+
+            decoded=$(echo "$hdr" | base64 -d 2>/dev/null)
+            net=$(echo "$decoded" | python3 -c "import sys,json; print(json.load(sys.stdin)['accepts'][0]['network'])")
+            amount=$(echo "$decoded" | python3 -c "import sys,json; print(json.load(sys.stdin)['accepts'][0]['amount'])")
+            payto=$(echo "$decoded" | python3 -c "import sys,json; print(json.load(sys.stdin)['accepts'][0]['payTo'])")
+
+            if [ "$net" != "eip155:8453" ]; then
+              echo "::error::$app DRIFT — network=$net (want eip155:8453)"
+              FAIL=1
+              continue
+            fi
+            if [ "$amount" != "$expected_amount" ]; then
+              echo "::error::$app DRIFT — amount=$amount (want $expected_amount)"
+              FAIL=1
+              continue
+            fi
+            if [ "$payto" != "0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770" ]; then
+              echo "::error::$app DRIFT — payTo=$payto (want 0x9e6A...71770)"
+              FAIL=1
+              continue
+            fi
+
+            printf "OK %-22s health=%s net=%s amount=%s\n" "$app" "$health" "$net" "$amount"
+          done
+
+          if [ $FAIL -ne 0 ]; then
+            echo "::error::One or more x402 endpoints drifted or are down"
+            exit 1
+          fi
+          echo "All 7 x402 endpoints: mainnet ✓ amounts ✓ payTo ✓"
