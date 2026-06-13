@@ -36,6 +36,24 @@ if (HAS_CDP) {
 const x402Server = new x402ResourceServer(facilitatorClient);
 x402Server.register(NETWORK, new ExactEvmScheme());
 
+// Boot-resilient facilitator init (fix 2026-06-13): eager sync-on-start is disabled in
+// paymentMiddleware (5th arg false); pre-warm supported-kinds here with retry/backoff so a
+// transient facilitator blip can never crash boot. Previously the eager initialize() promise
+// rejected unhandled -> Node exit 1 -> Fly restart loop -> machine death after 10 tries.
+(async () => {
+  for (let i = 1; i <= 12; i++) {
+    try {
+      await x402Server.initialize();
+      console.log(`→ x402 facilitator ready (attempt ${i})`);
+      return;
+    } catch (e) {
+      console.warn(`x402 facilitator init attempt ${i}/12 failed: ${e?.message || e}`);
+      await new Promise((r) => setTimeout(r, Math.min(2000 * i, 15000)));
+    }
+  }
+  console.warn("x402 facilitator not ready after retries; will init lazily on first paid request");
+})();
+
 const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "2mb" }));
@@ -246,7 +264,7 @@ registerDiscoveryEndpoints(app, routesConfig, {
   operator: "Royal Agentic Enterprises"
 });
 
-app.use(paymentMiddleware(routesConfig, x402Server));
+app.use(paymentMiddleware(routesConfig, x402Server, undefined, undefined, false));
 
 function runAnalyze({ ticker, date, analysts }) {
   return new Promise((resolve, reject) => {
