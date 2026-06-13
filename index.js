@@ -37,7 +37,95 @@ const x402Server = new x402ResourceServer(facilitatorClient);
 x402Server.register(NETWORK, new ExactEvmScheme());
 
 const app = express();
+app.set("trust proxy", true);
 app.use(express.json({ limit: "2mb" }));
+
+// ------------------ x402 compliance hardenings (PR #381) ------------------
+app.use((req, res, next) => {
+  const origin = req.headers.origin || "*";
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Payment, PAYMENT-SIGNATURE, Authorization, X-Credit-Token");
+  res.setHeader("Access-Control-Expose-Headers", "PAYMENT-REQUIRED, X-Payment, PAYMENT-SIGNATURE, Cache-Control");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+
+  const originalWriteHead = res.writeHead;
+  res.writeHead = function(statusCode, ...args) {
+    const actualStatus = statusCode || res.statusCode;
+    if (actualStatus === 402) {
+      res.setHeader("Cache-Control", "private, no-store");
+    }
+    return originalWriteHead.call(this, statusCode, ...args);
+  };
+  next();
+});
+
+function registerDiscoveryEndpoints(serverApp, routes, serviceInfo) {
+  const x402Manifest = {
+    version: "2.0.0",
+    service: {
+      name: serviceInfo.name,
+      description: serviceInfo.description,
+      contact: serviceInfo.contact || "jadedfocus@gmail.com",
+      operator: serviceInfo.operator || "Royal Agentic Enterprises"
+    },
+    endpoints: {}
+  };
+
+  const openapi = {
+    openapi: "3.0.0",
+    info: {
+      title: serviceInfo.title || serviceInfo.name,
+      description: serviceInfo.description,
+      version: "1.0.0",
+      contact: {
+        email: serviceInfo.contact || "jadedfocus@gmail.com"
+      }
+    },
+    paths: {}
+  };
+
+  for (const [routeKey, routeVal] of Object.entries(routes)) {
+    const parts = routeKey.trim().split(/\s+/);
+    if (parts.length < 2) continue;
+    const method = parts[0].toLowerCase();
+    const path = parts[1];
+
+    x402Manifest.endpoints[path] = {
+      method: method.toUpperCase(),
+      accepts: routeVal.accepts,
+      description: routeVal.description,
+      mimeType: routeVal.mimeType
+    };
+
+    if (!openapi.paths[path]) {
+      openapi.paths[path] = {};
+    }
+    openapi.paths[path][method] = {
+      summary: routeVal.description ? routeVal.description.split(".")[0] : `Endpoint ${path}`,
+      description: routeVal.description,
+      "x-payment": routeVal.accepts,
+      responses: {
+        "200": { description: "Successful response" },
+        "402": { description: "Payment Required" }
+      }
+    };
+  }
+
+  serverApp.get("/.well-known/x402.json", (req, res) => res.json(x402Manifest));
+  serverApp.get("/.well-known/x402", (req, res) => res.json(x402Manifest));
+  serverApp.get("/.well-known/x402/services", (req, res) => res.json({
+    services: [
+      {
+        name: serviceInfo.name,
+        description: serviceInfo.description,
+        endpoints: Object.keys(x402Manifest.endpoints)
+      }
+    ]
+  }));
+  serverApp.get("/openapi.json", (req, res) => res.json(openapi));
+}
+// --------------------------------------------------------------------------
 
 app.get("/health", (_req, res) =>
   res.json({
@@ -61,99 +149,104 @@ app.get("/about", (_req, res) =>
 
 const PRICE = "$1.00";
 
-app.use(
-  paymentMiddleware(
-    {
-      "POST /api/analyze-ticker": {
-        accepts: {
-          scheme: "exact",
-          price: PRICE,
-          network: NETWORK,
-          payTo: PAY_TO,
-        },
-        description:
-          "Run a full multi-agent analysis for any publicly traded ticker. Body: { ticker: string, date?: 'YYYY-MM-DD' (defaults to today), analysts?: string[] (default ['market','social','news','fundamentals']) }. Returns final BUY/HOLD/SELL decision, confidence, structured rationale, and per-agent reports. Uses Claude Haiku 4.5 for cost-efficient deep+quick reasoning; debate rounds=1, risk rounds=1. End-to-end latency typically 60-180s. Not financial advice — research output only.",
-        mimeType: "application/json",
-        extensions: {
-          ...declareDiscoveryExtension({
-            output: {
-              example: {
-                ok: true,
-                ticker: "NVDA",
-                date: "2026-05-15",
-                decision: "BUY",
-                confidence: "high",
-                summary: "Strong fundamentals, bullish momentum, positive sentiment despite macro headwinds.",
-                reports: {
-                  fundamentals: "Q1 earnings beat by 12%...",
-                  sentiment: "StockTwits bull/bear ratio 3.2:1...",
-                  news: "Data-center capex guidance upgraded...",
-                  technical: "Above 50/200 SMA, RSI 62...",
-                  trader_plan: "Long entry $920, target $1080, stop $880",
-                  risk_review: "Position size capped at 3% portfolio",
-                },
-              },
-              schema: {
-                $schema: "https://json-schema.org/draft/2020-12/schema",
+const routesConfig = {
+  "POST /api/analyze-ticker": {
+    accepts: {
+      scheme: "exact",
+      price: PRICE,
+      network: NETWORK,
+      payTo: PAY_TO,
+    },
+    description:
+      "Run a full multi-agent analysis for any publicly traded ticker. Body: { ticker: string, date?: 'YYYY-MM-DD' (defaults to today), analysts?: string[] (default ['market','social','news','fundamentals']) }. Returns final BUY/HOLD/SELL decision, confidence, structured rationale, and per-agent reports. Uses Claude Haiku 4.5 for cost-efficient deep+quick reasoning; debate rounds=1, risk rounds=1. End-to-end latency typically 60-180s. Not financial advice — research output only.",
+    mimeType: "application/json",
+    extensions: {
+      ...declareDiscoveryExtension({
+        output: {
+          example: {
+            ok: true,
+            ticker: "NVDA",
+            date: "2026-05-15",
+            decision: "BUY",
+            confidence: "high",
+            summary: "Strong fundamentals, bullish momentum, positive sentiment despite macro headwinds.",
+            reports: {
+              fundamentals: "Q1 earnings beat by 12%...",
+              sentiment: "StockTwits bull/bear ratio 3.2:1...",
+              news: "Data-center capex guidance upgraded...",
+              technical: "Above 50/200 SMA, RSI 62...",
+              trader_plan: "Long entry $920, target $1080, stop $880",
+              risk_review: "Position size capped at 3% portfolio",
+            },
+          },
+          schema: {
+            $schema: "https://json-schema.org/draft/2020-12/schema",
+            type: "object",
+            properties: {
+              input: {
                 type: "object",
                 properties: {
-                  input: {
+                  type: { type: "string", const: "http" },
+                  method: { type: "string", enum: ["POST"] },
+                  bodyFields: {
                     type: "object",
                     properties: {
-                      type: { type: "string", const: "http" },
-                      method: { type: "string", enum: ["POST"] },
-                      bodyFields: {
-                        type: "object",
-                        properties: {
-                          ticker: { type: "string", description: "Stock symbol (e.g. NVDA, AAPL)" },
-                          date: {
-                            type: "string",
-                            description: "YYYY-MM-DD, optional — defaults to today UTC",
-                          },
-                          analysts: {
-                            type: "array",
-                            items: {
-                              type: "string",
-                              enum: ["market", "social", "news", "fundamentals"],
-                            },
-                          },
+                      ticker: { type: "string", description: "Stock symbol (e.g. NVDA, AAPL)" },
+                      date: {
+                        type: "string",
+                        description: "YYYY-MM-DD, optional — defaults to today UTC",
+                      },
+                      analysts: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                          enum: ["market", "social", "news", "fundamentals"],
                         },
-                        required: ["ticker"],
                       },
                     },
-                    required: ["type", "method", "bodyFields"],
-                  },
-                  output: {
-                    type: "object",
-                    properties: {
-                      type: { type: "string" },
-                      example: {
-                        type: "object",
-                        properties: {
-                          ok: { type: "boolean" },
-                          ticker: { type: "string" },
-                          date: { type: "string" },
-                          decision: { type: "string", enum: ["BUY", "HOLD", "SELL"] },
-                          confidence: { type: "string" },
-                          summary: { type: "string" },
-                          reports: { type: "object" },
-                          error: { type: "string" },
-                        },
-                        required: ["ok"],
-                      },
-                    },
+                    required: ["ticker"],
                   },
                 },
-                required: ["input"],
+                required: ["type", "method", "bodyFields"],
+              },
+              output: {
+                type: "object",
+                properties: {
+                  type: { type: "string" },
+                  example: {
+                    type: "object",
+                    properties: {
+                      ok: { type: "boolean" },
+                      ticker: { type: "string" },
+                      date: { type: "string" },
+                      decision: { type: "string", enum: ["BUY", "HOLD", "SELL"] },
+                      confidence: { type: "string" },
+                      summary: { type: "string" },
+                      reports: { type: "object" },
+                      error: { type: "string" },
+                    },
+                    required: ["ok"],
+                  },
+                },
               },
             },
-          }),
+            required: ["input"],
+          },
         },
-      },
+      }),
     },
-    x402Server,
-  ),
-);
+  },
+};
+
+registerDiscoveryEndpoints(app, routesConfig, {
+  name: "tradingagents",
+  title: "TradingAgents — Multi-agent LLM ticker consensus",
+  description: "Pay $1.00 USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).",
+  contact: "jadedfocus@gmail.com",
+  operator: "Royal Agentic Enterprises"
+});
+
+app.use(paymentMiddleware(routesConfig, x402Server));
 
 function runAnalyze({ ticker, date, analysts }) {
   return new Promise((resolve, reject) => {
