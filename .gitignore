@@ -1,5 +1,4 @@
 node_modules/
-engine/
 *.log
 .DS_Store
 __pycache__/
