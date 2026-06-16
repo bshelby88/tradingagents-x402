@@ -201,54 +201,16 @@ const routesConfig = {
             $schema: "https://json-schema.org/draft/2020-12/schema",
             type: "object",
             properties: {
-              input: {
-                type: "object",
-                properties: {
-                  type: { type: "string", const: "http" },
-                  method: { type: "string", enum: ["POST"] },
-                  bodyFields: {
-                    type: "object",
-                    properties: {
-                      ticker: { type: "string", description: "Stock symbol (e.g. NVDA, AAPL)" },
-                      date: {
-                        type: "string",
-                        description: "YYYY-MM-DD, optional — defaults to today UTC",
-                      },
-                      analysts: {
-                        type: "array",
-                        items: {
-                          type: "string",
-                          enum: ["market", "social", "news", "fundamentals"],
-                        },
-                      },
-                    },
-                    required: ["ticker"],
-                  },
-                },
-                required: ["type", "method", "bodyFields"],
-              },
-              output: {
-                type: "object",
-                properties: {
-                  type: { type: "string" },
-                  example: {
-                    type: "object",
-                    properties: {
-                      ok: { type: "boolean" },
-                      ticker: { type: "string" },
-                      date: { type: "string" },
-                      decision: { type: "string", enum: ["BUY", "HOLD", "SELL"] },
-                      confidence: { type: "string" },
-                      summary: { type: "string" },
-                      reports: { type: "object" },
-                      error: { type: "string" },
-                    },
-                    required: ["ok"],
-                  },
-                },
-              },
+              ok: { type: "boolean" },
+              ticker: { type: "string" },
+              date: { type: "string" },
+              decision: { type: "string", enum: ["BUY", "HOLD", "SELL"] },
+              confidence: { type: "string" },
+              summary: { type: "string" },
+              reports: { type: "object" },
+              error: { type: "string" },
             },
-            required: ["input"],
+            required: ["ok"],
           },
         },
       }),
