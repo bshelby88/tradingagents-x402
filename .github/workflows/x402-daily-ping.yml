@@ -1,6 +1,6 @@
 name: x402 daily Bazaar self-ping
 
-# Verifies all 7 x402 endpoints daily:
+# Verifies all 8 x402 endpoints daily:
 #   1. /health returns 200 (wakes suspended Fly machines)
 #   2. POST /api/* returns 402 with payment-required header
 #   3. Decoded 402 metadata matches expected network (Base mainnet) + amount
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Health + 402 drift check (7 apps)
+      - name: Health + 402 drift check (8 apps)
         run: |
           set -uo pipefail
           declare -a ENTRIES=(
@@ -27,6 +27,7 @@ jobs:
             "royal-ruby-x402     /api/law-lookup          50000"
             "suprapack-x402      /api/find-skill          10000"
             "tradingagents-x402  /api/analyze-ticker    1000000"
+            "nft-alpha-x402      /api/nft-signal          100000"
           )
           FAIL=0
           for entry in "${ENTRIES[@]}"; do
@@ -77,4 +78,4 @@ jobs:
             echo "::error::One or more x402 endpoints drifted or are down"
             exit 1
           fi
-          echo "All 7 x402 endpoints: mainnet ✓ amounts ✓ payTo ✓"
+          echo "All 8 x402 endpoints: mainnet ✓ amounts ✓ payTo ✓"
