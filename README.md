@@ -2,7 +2,7 @@
 
 Paid x402 wrapper for [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) — multi-agent LLM ticker consensus over `POST /api/analyze-ticker`.
 
-- **Price:** $1.00 USDC on Base mainnet (`eip155:8453`)
+- **Price:** $1.00 USDC on Base mainnet (`eip155:8453`) — overridable via the `X402_PRICE` env var (defaults to `$1.00`)
 - **Network:** real USDC via Coinbase CDP facilitator
 - **Backbone:** Claude Haiku 4.5 (deep + quick), debate rounds=1, risk rounds=1
 - **Live at:** https://tradingagents-x402.fly.dev
@@ -35,10 +35,13 @@ fly secrets set \
   CDP_API_KEY_ID=fdab6c4e-1b5c-4299-8a7c-65d31fb91a57 \
   CDP_API_KEY_SECRET=<base64-ed25519> \
   X402_PAY_TO=0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770 \
+  X402_PRICE="$1.00" \
   -a tradingagents-x402
 ```
 
 CDP **v2** key required (bare UUID + Ed25519 base64). v1 SEC1 PEM keys fail with `Invalid key format`.
+
+Analyzer env: by default `analyze.py` runs the real TradingAgents graph and needs the framework data-source keys (see `engine/.env.example`). Set `TRADINGAGENTS_MOCK=1` to return a clearly-labeled sample HOLD instead — never the default; do not ship mock responses to paying customers.
 
 ## Request shape
 

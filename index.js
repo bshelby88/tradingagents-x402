@@ -16,6 +16,8 @@ const PYTHON = process.env.PYTHON_BIN || "python3";
 const ANALYZE_SCRIPT = process.env.ANALYZE_SCRIPT || "/app/analyze.py";
 const ANALYSIS_TIMEOUT_MS = Number(process.env.ANALYSIS_TIMEOUT_MS || 90000);
 
+const PRICE = process.env.X402_PRICE || "$1.00";
+
 // CDP secret base64 hop
 if (process.env.CDP_API_KEY_SECRET_B64) {
   process.env.CDP_API_KEY_SECRET = Buffer.from(process.env.CDP_API_KEY_SECRET_B64, "base64").toString("utf-8");
@@ -160,13 +162,13 @@ app.get("/about", (_req, res) =>
     service: "TradingAgents — Multi-agent LLM ticker consensus",
     operator: "Royal Agentic Enterprises",
     description:
-      "Pay $5.00 USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).",
+      `Pay ${PRICE} USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).`,
     docs: "https://github.com/TauricResearch/TradingAgents",
     contact: "jadedfocus@gmail.com",
   }),
 );
 
-const PRICE = "$5.00";
+
 
 function analyzeTickerRequestSchema() {
   return {
@@ -288,7 +290,7 @@ const routesConfig = {
 registerDiscoveryEndpoints(app, routesConfig, {
   name: "tradingagents",
   title: "TradingAgents — Multi-agent LLM ticker consensus",
-  description: "Pay $5.00 USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).",
+  description: `Pay ${PRICE} USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).`,
   contact: "jadedfocus@gmail.com",
   operator: "Royal Agentic Enterprises"
 });
@@ -343,7 +345,7 @@ app.use((req, res, next) => {
           ts: new Date().toISOString(),
           app: "tradingagents-x402",
           endpoint: req.path,
-          price_usdc: "$5.00",
+          price_usdc: PRICE,
           network: NETWORK,
           pay_to: PAY_TO,
           ok: Boolean(body && body.ok),
