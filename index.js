@@ -16,7 +16,7 @@ const PYTHON = process.env.PYTHON_BIN || "python3";
 const ANALYZE_SCRIPT = process.env.ANALYZE_SCRIPT || "/app/analyze.py";
 const ANALYSIS_TIMEOUT_MS = Number(process.env.ANALYSIS_TIMEOUT_MS || 90000);
 
-const PRICE = process.env.X402_PRICE || "$1.00";
+const PRICE = process.env.X402_PRICE || "$5.00";
 
 // CDP secret base64 hop
 if (process.env.CDP_API_KEY_SECRET_B64) {
