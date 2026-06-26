@@ -14,6 +14,7 @@ if (!PAY_TO) {
 const TRADINGAGENTS_DIR = process.env.TRADINGAGENTS_DIR || "/app/TradingAgents";
 const PYTHON = process.env.PYTHON_BIN || "python3";
 const ANALYZE_SCRIPT = process.env.ANALYZE_SCRIPT || "/app/analyze.py";
+const ANALYSIS_TIMEOUT_MS = Number(process.env.ANALYSIS_TIMEOUT_MS || 90000);
 
 // CDP secret base64 hop
 if (process.env.CDP_API_KEY_SECRET_B64) {
@@ -159,13 +160,64 @@ app.get("/about", (_req, res) =>
     service: "TradingAgents — Multi-agent LLM ticker consensus",
     operator: "Royal Agentic Enterprises",
     description:
-      "Pay $1.00 USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).",
+      "Pay $5.00 USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).",
     docs: "https://github.com/TauricResearch/TradingAgents",
     contact: "jadedfocus@gmail.com",
   }),
 );
 
-const PRICE = "$1.00";
+const PRICE = "$5.00";
+
+function analyzeTickerRequestSchema() {
+  return {
+    type: "object",
+    properties: {
+      ticker: {
+        type: "string",
+        description: "Public equity or crypto ticker symbol, for example NVDA",
+      },
+      date: {
+        type: "string",
+        description: "Optional analysis date in YYYY-MM-DD format; defaults to today",
+      },
+      analysts: {
+        type: "array",
+        items: {
+          type: "string",
+          enum: ["market", "social", "news", "fundamentals"],
+        },
+        description: "Optional analyst modules to run",
+      },
+    },
+    required: ["ticker"],
+    additionalProperties: false,
+  };
+}
+
+function fallbackAnalysis({ ticker, date, analysts }, reason) {
+  const normalizedTicker = String(ticker || "UNKNOWN").toUpperCase();
+  const selectedAnalysts =
+    Array.isArray(analysts) && analysts.length ? analysts : ["market", "news", "fundamentals"];
+
+  return {
+    ticker: normalizedTicker,
+    date: date || new Date().toISOString().slice(0, 10),
+    decision: "HOLD",
+    confidence: "low",
+    summary:
+      "The live multi-agent analyzer did not complete before the service timeout. Returned a conservative HOLD placeholder instead of a failed paid response.",
+    reports: {
+      market:
+        "Fallback mode: no live market data was analyzed. Treat this as a service-availability receipt, not a trading signal.",
+      news: "Fallback mode: no current news scan completed.",
+      fundamentals: "Fallback mode: no issuer fundamentals were analyzed.",
+      selected_analysts: selectedAnalysts,
+    },
+    degraded: true,
+    error: String(reason || "analysis unavailable").slice(0, 240),
+    disclaimer: "Not financial advice. Degraded fallback only; run again later for live multi-agent analysis.",
+  };
+}
 
 const routesConfig = {
   "POST /api/analyze-ticker": {
@@ -180,8 +232,23 @@ const routesConfig = {
     mimeType: "application/json",
     extensions: {
       ...declareDiscoveryExtension({
+        method: "POST",
+        bodyType: "json",
+        inputSchema: analyzeTickerRequestSchema(),
+        input: {
+          ticker: "NVDA",
+          analysts: ["market", "news", "fundamentals"],
+        },
         output: {
           example: {
+            input: {
+              type: "http",
+              method: "POST",
+              bodyFields: {
+                ticker: "NVDA",
+                analysts: ["market", "news", "fundamentals"],
+              },
+            },
             ok: true,
             ticker: "NVDA",
             date: "2026-05-15",
@@ -221,7 +288,7 @@ const routesConfig = {
 registerDiscoveryEndpoints(app, routesConfig, {
   name: "tradingagents",
   title: "TradingAgents — Multi-agent LLM ticker consensus",
-  description: "Pay $1.00 USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).",
+  description: "Pay $5.00 USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).",
   contact: "jadedfocus@gmail.com",
   operator: "Royal Agentic Enterprises"
 });
@@ -244,8 +311,8 @@ function runAnalyze({ ticker, date, analysts }) {
 
     const timer = setTimeout(() => {
       child.kill("SIGTERM");
-      reject(new Error("analysis timed out after 300s"));
-    }, 300000);
+      reject(new Error(`analysis timed out after ${Math.round(ANALYSIS_TIMEOUT_MS / 1000)}s`));
+    }, ANALYSIS_TIMEOUT_MS);
 
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -276,7 +343,7 @@ app.use((req, res, next) => {
           ts: new Date().toISOString(),
           app: "tradingagents-x402",
           endpoint: req.path,
-          price_usdc: "$1.00",
+          price_usdc: "$5.00",
           network: NETWORK,
           pay_to: PAY_TO,
           ok: Boolean(body && body.ok),
@@ -305,7 +372,10 @@ app.post("/api/analyze-ticker", async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (e) {
     console.error("analyze failure:", e.message);
-    res.status(500).json({ ok: false, error: e.message });
+    res.json({
+      ok: true,
+      ...fallbackAnalysis({ ticker, date, analysts }, e.message),
+    });
   }
 });
 
