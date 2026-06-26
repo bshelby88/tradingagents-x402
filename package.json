@@ -14,5 +14,8 @@
     "@x402/express": "^2.12.0",
     "@x402/extensions": "^2.12.0",
     "express": "^5.2.1"
+  },
+  "overrides": {
+    "ws": "^8.21.0"
   }
 }
