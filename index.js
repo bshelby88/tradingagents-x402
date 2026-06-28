@@ -293,6 +293,88 @@ registerDiscoveryEndpoints(app, routesConfig, {
   operator: "Royal Agentic Enterprises"
 });
 
+
+function originOf(req) {
+  return `${req.protocol}://${req.get("host")}`;
+}
+
+function landingHtml(req) {
+  const origin = originOf(req);
+  const title = "TradingAgents x402 - Multi-agent LLM ticker consensus";
+  const desc = `Paid x402 endpoint. Pay ${PRICE} USDC on Base and POST /api/analyze-ticker for a structured multi-agent trading recommendation: five specialist analysts (fundamentals, sentiment, news, technicals), bullish vs bearish researcher debate, trader synthesis, risk review, and a final BUY/HOLD/SELL decision with confidence and rationale. Powered by the open-source TradingAgents framework (arXiv:2412.20138). Not financial advice.`;
+  const favicon =
+    "data:image/svg+xml," +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#0a0a0a"/><path d="M14 46 L26 22 L34 38 L42 18 L50 46" fill="none" stroke="#4ade80" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/></svg>',
+    );
+  const jsonld = {
+    "@context": "https://schema.org",
+    "@type": "WebService",
+    name: "TradingAgents x402",
+    description: desc,
+    provider: { "@type": "Organization", name: "Royal Agentic Enterprises" },
+    documentation: `${origin}/openapi.json`,
+    termsOfService: `${origin}/about`,
+  };
+  const esc = (s) => s.replace(/"/g, "&quot;");
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<meta name="description" content="${esc(desc)}">
+<link rel="icon" href="${favicon}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${esc(desc)}">
+<meta property="og:url" content="${origin}/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${esc(desc)}">
+<link rel="alternate" type="application/json" href="/openapi.json" title="OpenAPI 3.0">
+<link rel="alternate" type="application/json" href="/.well-known/x402" title="x402 discovery">
+<script type="application/ld+json">${JSON.stringify(jsonld)}</script>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #0a0a0a; color: #e6e6e6; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: 1.8rem; line-height: 1.2; margin: 0 0 8px; }
+  h2 { font-size: 1.15rem; margin: 28px 0 8px; }
+  .price { color: #4ade80; font-weight: 700; }
+  code { background: #1a1a1a; padding: 1px 6px; border-radius: 4px; }
+  pre { background: #141414; padding: 16px; border-radius: 8px; overflow: auto; }
+  a { color: #6cb6ff; }
+  ul { padding-left: 1.1em; }
+  .tag { display: inline-block; font-size: .8rem; background: #1a1a1a; border: 1px solid #2a2a2a; padding: 2px 10px; border-radius: 999px; }
+</style>
+</head>
+<body>
+<main>
+  <span class="tag">x402 &middot; Base USDC</span>
+  <h1>TradingAgents x402</h1>
+  <p>Multi-agent LLM ticker consensus as a paid <code>x402</code> endpoint. Pay <span class="price">${PRICE} USDC</span> on Base and <code>POST /api/analyze-ticker</code> for a structured BUY/HOLD/SELL decision with confidence, rationale, and full agent transcripts.</p>
+  <h2>Endpoint</h2>
+  <pre>POST ${origin}/api/analyze-ticker
+Content-Type: application/json
+X-Payment: &lt;x402 payment&gt;
+
+{ "ticker": "NVDA" }</pre>
+  <p>Optional: <code>{ "ticker": "NVDA", "date": "2026-05-15", "analysts": ["market","news","fundamentals"] }</code>. Latency is typically 60-180s.</p>
+  <h2>Discovery</h2>
+  <ul>
+    <li><a href="/openapi.json">OpenAPI 3.0 spec</a></li>
+    <li><a href="/.well-known/x402">x402 well-known manifest</a></li>
+    <li><a href="/about">About</a> &middot; <a href="/health">Health</a></li>
+  </ul>
+  <p>Network: <code>${NETWORK}</code> &middot; Operator: Royal Agentic Enterprises</p>
+  <p style="opacity:.7">Not financial advice. Research output only; a degraded fallback may be returned if the live analyzer times out.</p>
+</main>
+</body>
+</html>`;
+}
+
+app.get("/", (req, res) => res.type("html").send(landingHtml(req)));
 app.use(paymentMiddleware(routesConfig, x402Server, undefined, undefined, false));
 
 function runAnalyze({ ticker, date, analysts }) {
