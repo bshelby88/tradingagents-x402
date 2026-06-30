@@ -155,18 +155,18 @@ app.get("/health", (_req, res) =>
   }),
 );
 
+const PRICE = process.env.X402_PRICE ? `$${(Number(process.env.X402_PRICE) / 1000000).toFixed(2)}` : "$0.05";
+
 app.get("/about", (_req, res) =>
   res.json({
     service: "TradingAgents — Multi-agent LLM ticker consensus",
     operator: "Royal Agentic Enterprises",
     description:
-      "Pay $5.00 USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).",
+      `Pay ${PRICE} USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).`,
     docs: "https://github.com/TauricResearch/TradingAgents",
     contact: "jadedfocus@gmail.com",
   }),
 );
-
-const PRICE = "$5.00";
 
 function analyzeTickerRequestSchema() {
   return {
