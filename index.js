@@ -219,6 +219,49 @@ function fallbackAnalysis({ ticker, date, analysts }, reason) {
   };
 }
 
+const RECEIPT_SECRET = process.env.RECEIPT_SECRET || "tradingagents-dev";
+const receiptEntries = new Map();
+
+function receiptSign(payload) {
+  const data = JSON.stringify(payload);
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < data.length; i++) {
+    h ^= data.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h.toString(16);
+}
+
+const receipts = {
+  verify(receipt, secret) {
+    try {
+      const payload = receipt && receipt.payload;
+      const sig = receipt && receipt.signature;
+      if (!payload || !sig) return false;
+      return sig === receiptSign({ ...payload, secret });
+    } catch {
+      return false;
+    }
+  },
+
+  record(nonce, response, secret) {
+    const payload = { nonce, response, ts: Date.now() };
+    const signature = receiptSign({ ...payload, secret });
+    receiptEntries.set(nonce, { payload, signature });
+    return { payload: { nonce, response, ts: payload.ts }, signature };
+  },
+
+  lookup(nonce) {
+    const entry = receiptEntries.get(nonce);
+    if (!entry) return null;
+    if (Date.now() - entry.payload.ts > 3600000) {
+      receiptEntries.delete(nonce);
+      return null;
+    }
+    return entry.payload;
+  },
+};
+
 const routesConfig = {
   "POST /api/analyze-ticker": {
     accepts: {
@@ -451,17 +494,29 @@ app.post("/api/analyze-ticker", async (req, res) => {
   }
   try {
     const result = await runAnalyze({ ticker: ticker.toUpperCase(), date, analysts });
-    res.json({ ok: true, ...result });
+    const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
+    const cached = paymentSignature ? receipts.lookup(paymentSignature) : null;
+    if (cached) return res.json({ ok: true, replay: true, receipt: { payload: cached.payload, signature: receipts.record(paymentSignature, cached.response, RECEIPT_SECRET).signature }, ...cached.response });
+    const receipt = receipts.record(paymentSignature, result, RECEIPT_SECRET);
+    res.json({ ok: true, receipt, ...result });
   } catch (e) {
     console.error("analyze failure:", e.message);
-    res.json({
-      ok: true,
-      ...fallbackAnalysis({ ticker, date, analysts }, e.message),
-    });
+    const fallback = fallbackAnalysis({ ticker, date, analysts }, e.message);
+    const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
+    const receipt = receipts.record(paymentSignature, fallback, RECEIPT_SECRET);
+    res.json({ ok: true, receipt, ...fallback });
   }
 });
 
 const PORT = Number(process.env.PORT) || 3000;
+app.get("/api/receipts/verify", (req, res) => {
+  try {
+    const receipt = JSON.parse(req.query.receipt || "{}");
+    res.json({ valid: receipts.verify(receipt, RECEIPT_SECRET) });
+  } catch {
+    res.json({ valid: false });
+  }
+});
 app.listen(PORT, () => {
   console.log(`tradingagents-x402 listening on :${PORT} (network=${NETWORK}, price=${PRICE})`);
 });
