@@ -123,7 +123,10 @@ function registerDiscoveryEndpoints(serverApp, routes, serviceInfo) {
     openapi.paths[path][method] = {
       summary: routeVal.description ? routeVal.description.split(".")[0] : `Endpoint ${path}`,
       description: routeVal.description,
-      "x-payment": routeVal.accepts,
+      "x-payment-info": {
+        price: { mode: "fixed", currency: "USD", amount: routeVal.accepts && routeVal.accepts.price ? String(routeVal.accepts.price).replace("$","") + "0000" : "0.050000" },
+        protocols: [{ x402: {} }],
+      },
       responses: {
         "200": { description: "Successful response" },
         "402": { description: "Payment Required" }
