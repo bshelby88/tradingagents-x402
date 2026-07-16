@@ -331,7 +331,7 @@ const routesConfig = {
 registerDiscoveryEndpoints(app, routesConfig, {
   name: "tradingagents",
   title: "TradingAgents — Multi-agent LLM ticker consensus",
-  description: "Pay $5.00 USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).",
+  description: `Pay ${PRICE} USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).`,
   contact: "jadedfocus@gmail.com",
   operator: "Royal Agentic Enterprises"
 });
@@ -465,15 +465,15 @@ app.use((req, res, next) => {
     if (res.statusCode === 200) {
       try {
         console.log(`[LEDGER] ${JSON.stringify({
-          ts: new Date().toISOString(),
-          app: "tradingagents-x402",
-          endpoint: req.path,
-          price_usdc: "$5.00",
-          network: NETWORK,
-          pay_to: PAY_TO,
-          ok: Boolean(body && body.ok),
-          latency_ms: Date.now() - t0,
-        })}`);
+            ts: new Date().toISOString(),
+            app: "tradingagents-x402",
+            endpoint: req.path,
+            price_usdc: PRICE,
+            network: NETWORK,
+            pay_to: PAY_TO,
+            ok: Boolean(body && body.ok),
+            latency_ms: Date.now() - t0,
+          })}`);
       } catch (_) {}
     }
     return origJson(body);

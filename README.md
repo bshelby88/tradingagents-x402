@@ -2,7 +2,7 @@
 
 Paid x402 wrapper for [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) — multi-agent LLM ticker consensus over `POST /api/analyze-ticker`.
 
-- **Price:** $1.00 USDC on Base mainnet (`eip155:8453`)
+- **Price:** `$0.05` USDC on Base mainnet (`eip155:8453`) unless overridden by `X402_PRICE` in USDC cents.
 - **Network:** real USDC via Coinbase CDP facilitator
 - **Backbone:** Claude Haiku 4.5 (deep + quick), debate rounds=1, risk rounds=1
 - **Live at:** https://tradingagents-x402.fly.dev
