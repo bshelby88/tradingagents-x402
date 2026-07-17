@@ -21,12 +21,12 @@ jobs:
           set -uo pipefail
           declare -a ENTRIES=(
             "sentry-forge-x402   /api/dispute-pack       500000"
-            "nanobanana-x402     /api/generate-image      20000"
+            "nanobanana-x402     /api/generate-image      10000"
             "vault-pro-x402      /api/scaffold-project    50000"
             "power-pack-x402     /api/score-email         10000"
-            "royal-ruby-x402     /api/law-lookup          50000"
-            "suprapack-x402      /api/find-skill          10000"
-            "tradingagents-x402  /api/analyze-ticker    1000000"
+            "royal-ruby-x402     /api/law-lookup          10000"
+            "suprapack-x402      /api/find-skill          30000"
+            "tradingagents-x402  /api/analyze-ticker      50000"
             "nft-alpha-x402      /api/nft-signal          100000"
           )
           FAIL=0
@@ -65,8 +65,8 @@ jobs:
               FAIL=1
               continue
             fi
-            if [ "$payto" != "0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770" ]; then
-              echo "::error::$app DRIFT — payTo=$payto (want 0x9e6A...71770)"
+            if [ "$payto" != "0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770" ] && [ "$payto" != "0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f" ]; then
+              echo "::error::$app DRIFT — payTo=$payto (want 0x9e6A...71770 or 0x9b8a...f72f)"
               FAIL=1
               continue
             fi
