@@ -1,0 +1,35 @@
+name: Fleet Health + 402 Challenge Check
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # every 6 hours
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Health check
+        run: |
+          curl -fsS https://staci-tradingagents.fly.dev/health | jq -e '.status == "ok"'
+
+      - name: Manifest check
+        run: |
+          curl -fsS https://staci-tradingagents.fly.dev/.well-known/x402 | jq -e '.version'
+
+      - name: 402 challenge check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            -X POST https://staci-tradingagents.fly.dev/api/analyze-ticker \
+            -H 'Content-Type: application/json' \
+            -d '{"ticker":"BTC"}')
+          if [ "$STATUS" != "402" ]; then
+            echo "Expected HTTP 402, got $STATUS"
+            exit 1
+          fi
+
+      - name: Receipt verifier check
+        run: |
+          curl -fsS 'https://staci-tradingagents.fly.dev/api/receipts/verify?receipt=%7B%7D' | jq -e '.valid == false'
