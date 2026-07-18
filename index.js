@@ -1,4 +1,6 @@
+const crypto = require("crypto");
 const express = require("express");
+const { toonMiddleware } = require("./toon_middleware");
 const { spawn } = require("node:child_process");
 const { paymentMiddleware } = require("@x402/express");
 const { x402ResourceServer, HTTPFacilitatorClient } = require("@x402/core/server");
@@ -58,6 +60,7 @@ x402Server.register(NETWORK, new ExactEvmScheme());
 const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "2mb" }));
+app.use(toonMiddleware);
 
 // ------------------ x402 compliance hardenings (PR #381) ------------------
 app.use((req, res, next) => {
@@ -223,49 +226,64 @@ function fallbackAnalysis({ ticker, date, analysts }, reason) {
 }
 
 const RECEIPT_SECRET = process.env.RECEIPT_SECRET || "tradingagents-dev";
-const receiptEntries = new Map();
-
-function receiptSign(payload) {
-  const data = JSON.stringify(payload);
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < data.length; i++) {
-    h ^= data.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h.toString(16);
+// Simple in-memory receipt store
+function createReceiptStore(maxEntries = 5000) {
+  const map = new Map();
+  return {
+    lookup(nonce) {
+      return map.get(nonce);
+    },
+    record(nonce, response, secret) {
+      const responseJson = JSON.stringify(response);
+      const responseHash = crypto.createHash("sha256").update(responseJson).digest("hex");
+      const receipt = {
+        paymentNonce: nonce,
+        responseHash,
+        deliveredAt: new Date().toISOString(),
+        hmac: crypto
+          .createHmac("sha256", secret || "staci-dev")
+          .update(nonce + responseHash)
+          .digest("hex"),
+      };
+      map.set(nonce, { responseHash, response, receipt, ts: Date.now() });
+      if (map.size > maxEntries) {
+        const oldest = map.keys().next().value;
+        map.delete(oldest);
+      }
+      return receipt;
+    },
+    verify(receipt, secret) {
+      if (!receipt || !receipt.paymentNonce || !receipt.responseHash) return false;
+      const expect = crypto
+        .createHmac("sha256", secret || "staci-dev")
+        .update(receipt.paymentNonce + receipt.responseHash)
+        .digest("hex");
+      try {
+        return crypto.timingSafeEqual(Buffer.from(expect), Buffer.from(String(receipt.hmac || "")));
+      } catch {
+        return false;
+      }
+    },
+    size() {
+      return map.size;
+    },
+  };
 }
 
-const receipts = {
-  verify(receipt, secret) {
-    try {
-      const payload = receipt && receipt.payload;
-      const sig = receipt && receipt.signature;
-      if (!payload || !sig) return false;
-      return sig === receiptSign({ ...payload, secret });
-    } catch {
-      return false;
-    }
-  },
-
-  record(nonce, response, secret) {
-    const payload = { nonce, response, ts: Date.now() };
-    const signature = receiptSign({ ...payload, secret });
-    receiptEntries.set(nonce, { payload, signature });
-    return { payload: { nonce, response, ts: payload.ts }, signature };
-  },
-
-  lookup(nonce) {
-    const entry = receiptEntries.get(nonce);
-    if (!entry) return null;
-    if (Date.now() - entry.payload.ts > 3600000) {
-      receiptEntries.delete(nonce);
-      return null;
-    }
-    return entry.payload;
-  },
-};
+const receipts = createReceiptStore();
+// duplicate RECEIPT_SECRET removed
 
 const routesConfig = {
+  "POST /api/analyze-arbitrage": {
+    accepts: {
+      scheme: "exact",
+      price: PRICE,
+      network: NETWORK,
+      payTo: PAY_TO,
+    },
+    description: "Run BlockRun.ai-backed arbitrage market consensus. Body: { ticker: string }.",
+    mimeType: "application/json",
+  },
   "POST /api/analyze-ticker": {
     accepts: {
       scheme: "exact",
@@ -511,6 +529,30 @@ app.post("/api/analyze-ticker", async (req, res) => {
   }
 });
 
+const { synthesizeMarketReport } = require("./blockrun-arbitrage");
+
+app.post("/api/analyze-arbitrage", async (req, res) => {
+  const { ticker } = req.body || {};
+  if (!ticker || typeof ticker !== "string" || !/^[A-Za-z0-9.\-]{1,10}$/.test(ticker)) {
+    return res.status(400).json({ ok: false, error: "invalid ticker" });
+  }
+  
+  const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
+  const cached = paymentSignature && receipts.lookup(paymentSignature);
+  if (cached) {
+    return res.json({ ok: true, replay: true, receipt: cached.receipt, ...cached.response });
+  }
+
+  try {
+    const result = await synthesizeMarketReport(ticker);
+    const receipt = paymentSignature ? receipts.record(paymentSignature, result.report || { error: result.error }, RECEIPT_SECRET) : undefined;
+    res.json({ ok: result.ok, receipt, ...(result.report || { error: result.error }) });
+  } catch (e) {
+    console.error("arbitrage failure:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 const PORT = Number(process.env.PORT) || 3000;
 app.get("/api/receipts/verify", (req, res) => {
   try {
@@ -520,6 +562,6 @@ app.get("/api/receipts/verify", (req, res) => {
     res.json({ valid: false });
   }
 });
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`tradingagents-x402 listening on :${PORT} (network=${NETWORK}, price=${PRICE})`);
 });
