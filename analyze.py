@@ -97,8 +97,21 @@ def main() -> None:
         ta = TradingAgentsGraph(selected_analysts=analysts, debug=False, config=config)
         final_state, decision = ta.propagate(ticker, date)
     except Exception as e:
-        print(traceback.format_exc(), file=sys.stderr)
-        fail(f"analysis failed: {e}")
+        if config.get("llm_provider") == "anthropic" and os.environ.get("OPENROUTER_API_KEY"):
+            print("Anthropic call failed; attempting fallback to OpenRouter...", file=sys.stderr)
+            try:
+                config["llm_provider"] = "openrouter"
+                config["deep_think_llm"] = "anthropic/claude-3.5-haiku"
+                config["quick_think_llm"] = "anthropic/claude-3.5-haiku"
+                ta = TradingAgentsGraph(selected_analysts=analysts, debug=False, config=config)
+                final_state, decision = ta.propagate(ticker, date)
+            except Exception as fallback_err:
+                print(f"OpenRouter fallback failed: {fallback_err}", file=sys.stderr)
+                print(traceback.format_exc(), file=sys.stderr)
+                fail(f"analysis failed: {e}")
+        else:
+            print(traceback.format_exc(), file=sys.stderr)
+            fail(f"analysis failed: {e}")
 
     def pick(*keys: str) -> str:
         for k in keys:

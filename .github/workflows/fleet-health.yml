@@ -13,16 +13,16 @@ jobs:
 
       - name: Health check
         run: |
-          curl -fsS https://staci-tradingagents.fly.dev/health | jq -e '.status == "ok"'
+          curl -fsS https://tradingagents-x402.fly.dev/health | jq -e '.status == "ok"'
 
       - name: Manifest check
         run: |
-          curl -fsS https://staci-tradingagents.fly.dev/.well-known/x402 | jq -e '.version'
+          curl -fsS https://tradingagents-x402.fly.dev/.well-known/x402 | jq -e '.version'
 
       - name: 402 challenge check
         run: |
           STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
-            -X POST https://staci-tradingagents.fly.dev/api/analyze-ticker \
+            -X POST https://tradingagents-x402.fly.dev/api/analyze-ticker \
             -H 'Content-Type: application/json' \
             -d '{"ticker":"BTC"}')
           if [ "$STATUS" != "402" ]; then
@@ -32,4 +32,4 @@ jobs:
 
       - name: Receipt verifier check
         run: |
-          curl -fsS 'https://staci-tradingagents.fly.dev/api/receipts/verify?receipt=%7B%7D' | jq -e '.valid == false'
+          curl -fsS 'https://tradingagents-x402.fly.dev/api/receipts/verify?receipt=%7B%7D' | jq -e '.valid == false'
