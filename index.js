@@ -469,77 +469,7 @@ X-Payment: &lt;x402 payment&gt;
 </html>`;
 }
 
-// NFT Utility-Gated Bypass Wrapper
-function nftGateWrapper(x402Middleware) {
-  const NFT_CONTRACT_ADDRESS = "0xAE0B6C3b5Ca2e9b1a5dDe2a2458bd7f564752233";
-
-  return async function (req, res, next) {
-    const address = req.headers["x-wallet-address"];
-    const signature = req.headers["x-wallet-signature"];
-    const timestampStr = req.headers["x-wallet-timestamp"];
-
-    if (!address || !signature || !timestampStr) {
-      return x402Middleware(req, res, next);
-    }
-
-    try {
-      const timestamp = parseInt(timestampStr, 10);
-      if (isNaN(timestamp) || Math.abs(Date.now() - timestamp) > 300000) {
-        console.log(`[BYPASS] Invalid timestamp: ${timestampStr}`);
-        return x402Middleware(req, res, next);
-      }
-
-      // Safe dynamic import of ethers that works in both ES Modules and CommonJS
-      let ethers;
-      try {
-        const ethersModule = await import("ethers");
-        ethers = ethersModule.ethers || ethersModule.default || ethersModule;
-      } catch (e) {
-        ethers = require("ethers");
-      }
-
-      const message = `Sentry Forge Gated Bypass: ${timestamp}`;
-      const recoveredAddress = ethers.verifyMessage(message, signature);
-
-      if (recoveredAddress.toLowerCase() !== address.toLowerCase()) {
-        console.log(`[BYPASS] Signature mismatch: recovered ${recoveredAddress} vs declared ${address}`);
-        return x402Middleware(req, res, next);
-      }
-
-      const response = await fetch("https://mainnet.base.org", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "eth_call",
-          params: [
-            {
-              to: NFT_CONTRACT_ADDRESS,
-              data: "0x70a08231000000000000000000000000" + address.replace("0x", "").toLowerCase()
-            },
-            "latest"
-          ]
-        })
-      });
-      
-      const result = await response.json();
-      if (result && result.result) {
-        const balance = parseInt(result.result, 16);
-        if (balance > 0) {
-          console.log(`[BYPASS] Verified NFT holder: ${address} (balance: ${balance})`);
-          return next();
-        }
-      }
-    } catch (err) {
-      console.error("[BYPASS] Verification error:", err);
-    }
-
-    return x402Middleware(req, res, next);
-  };
-}
-
-app.use(nftGateWrapper(paymentMiddleware(routesConfig, x402Server, undefined, undefined, false)));
+app.use(paymentMiddleware(routesConfig, x402Server, undefined, undefined, false));
 
 function runAnalyze({ ticker, date, analysts }) {
   return new Promise((resolve, reject) => {
