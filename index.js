@@ -164,6 +164,9 @@ function registerDiscoveryEndpoints(serverApp, routes, serviceInfo) {
       };
     }
 
+    if (!openapi.paths[path]) {
+      openapi.paths[path] = {};
+    }
     openapi.paths[path][method] = opObj;
   }
 
