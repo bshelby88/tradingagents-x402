@@ -85,6 +85,8 @@ app.use((req, res, next) => {
 function registerDiscoveryEndpoints(serverApp, routes, serviceInfo) {
   const x402Manifest = {
     version: "2.0.0",
+    openapi: "/openapi.json",
+    documentation: "/openapi.json",
     service: {
       name: serviceInfo.name,
       description: serviceInfo.description,
@@ -117,7 +119,8 @@ function registerDiscoveryEndpoints(serverApp, routes, serviceInfo) {
       method: method.toUpperCase(),
       accepts: routeVal.accepts,
       description: routeVal.description,
-      mimeType: routeVal.mimeType
+      mimeType: routeVal.mimeType,
+      ...(routeVal.extensions ? { extensions: routeVal.extensions } : {})
     };
 
     const discoveryExt = routeVal.extensions && routeVal.extensions["x-discovery"];
