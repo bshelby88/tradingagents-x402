@@ -24,7 +24,7 @@ function registerPublicDiscovery(app, config) {
       `> ${config.summary}`,
       "",
       `- Paid endpoint: ${method} ${baseUrl}${config.endpoint}`,
-      `- Current configured price: ${config.price} USDC per successful call`,
+      `- Current configured price: ${config.price} USDC per request`,
       `- Payment network: ${network}, USDC via x402`,
       `- Intended users: ${config.audience}`,
       `- x402 manifest: ${links.manifest}`,
@@ -43,7 +43,7 @@ function registerPublicDiscovery(app, config) {
     const disclaimer = config.disclaimer ? `\n\n${config.disclaimer}` : "";
     res.type("text/markdown").send(
       `# Pricing — ${config.name}\n\n` +
-        `- Price: **${config.price} USDC per successful call**\n` +
+        `- Price: **${config.price} USDC per request**\n` +
         "- Billing: pay per request; no account or subscription\n" +
         `- Network: ${network}\n` +
         `- Paid endpoint: \`${method} ${config.endpoint}\`\n` +

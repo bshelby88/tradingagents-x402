@@ -2,7 +2,7 @@
 
 Paid x402 endpoint associated with [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents). **The current `POST /api/analyze-ticker` implementation returns a canned synthetic, degraded demonstration payload. It does not execute TradingAgents, retrieve live market data, or provide agent transcripts.**
 
-- **Price:** `$0.05` USDC unless overridden by `X402_PRICE` as a positive integer in atomic micro-USDC units (`50000` = `$0.05`; 1 USDC = 1,000,000 units). Invalid, fractional, or non-finite values stop startup.
+- **Price:** `$0.05` USDC per request unless overridden by `X402_PRICE` as a positive integer in atomic micro-USDC units (`50000` = `$0.05`; 1 USDC = 1,000,000 units). Payment settles before downstream completion. Invalid, fractional, or non-finite values stop startup.
 - **Network:** production uses Base mainnet (`eip155:8453`) with the Coinbase CDP facilitator
 - **Configured synthetic report roles:** `market`, `social`, `news`, `fundamentals`. The optional `analysts` array controls which synthetic role report fields are returned; the current path does not run those roles.
 - **Live at:** https://tradingagents-x402.fly.dev
