@@ -116,7 +116,7 @@ function registerDiscoveryEndpoints(serverApp, routes, serviceInfo) {
   };
 
   const openapi = {
-    openapi: "3.0.0",
+    openapi: "3.1.0",
     info: {
       title: serviceInfo.title || serviceInfo.name,
       description: serviceInfo.description,
