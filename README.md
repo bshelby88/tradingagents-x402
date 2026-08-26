@@ -7,6 +7,8 @@ Paid x402 wrapper for [TauricResearch/TradingAgents](https://github.com/TauricRe
 - **Backbone:** Claude Haiku 4.5 (deep + quick), debate rounds=1, risk rounds=1
 - **Live at:** https://tradingagents-x402.fly.dev
 
+**Evaluate before paying:** inspect the [landing page](https://tradingagents-x402.fly.dev/), [OpenAPI document](https://tradingagents-x402.fly.dev/openapi.json), [machine-readable pricing](https://tradingagents-x402.fly.dev/pricing.md), and [live x402 manifest](https://tradingagents-x402.fly.dev/.well-known/x402.json). Output is research, not financial advice; review sources and assumptions before acting.
+
 ## Vendor
 
 The TradingAgents source is vendored into `engine/` at build time (not committed):

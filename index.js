@@ -197,6 +197,17 @@ app.get("/health", (_req, res) =>
 
 const PRICE = process.env.X402_PRICE ? `$${(Number(process.env.X402_PRICE) / 1000000).toFixed(2)}` : "$0.05";
 
+require("./public-discovery").registerPublicDiscovery(app, {
+  name: "TradingAgents x402",
+  summary: "Run a multi-agent ticker analysis and receive a structured research consensus.",
+  baseUrl: "https://tradingagents-x402.fly.dev",
+  endpoint: "/api/analyze-ticker",
+  price: PRICE,
+  audience: "research agents that need a structured second opinion on a public-market ticker",
+  disclaimer: "Research output only; not financial advice. Review the sources and assumptions.",
+  homepage: false,
+});
+
 app.get("/about", (_req, res) =>
   res.json({
     service: "TradingAgents — Multi-agent LLM ticker consensus",
