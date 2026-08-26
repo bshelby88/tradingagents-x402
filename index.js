@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const express = require("express");
+const Ajv = require("ajv");
 const { toonMiddleware } = require("./toon_middleware");
 const { spawn } = require("node:child_process");
 const { paymentMiddleware } = require("@x402/express");
@@ -72,6 +73,12 @@ let facilitatorReady = false;
 const app = express();
 app.set("trust proxy", true);
 app.use(express.json({ limit: "2mb" }));
+app.use((error, _req, res, next) => {
+  if (error instanceof SyntaxError && error.type === "entity.parse.failed") {
+    return res.status(400).json({ ok: false, error: "request body must contain valid JSON" });
+  }
+  return next(error);
+});
 app.use(toonMiddleware);
 
 // ------------------ x402 compliance hardenings (PR #381) ------------------
@@ -224,22 +231,30 @@ app.get("/about", (_req, res) =>
     service: "TradingAgents x402 — synthetic degraded ticker demonstration",
     operator: "Royal Agentic Enterprises",
     description:
-      `Pay ${PRICE} USDC for the current synthetic degraded demonstration payload. ${SYNTHETIC_DESCRIPTION} The response contains canned BUY/HOLD/SELL-shaped fields and must not be treated as market research.`,
+      `Pay ${PRICE} USDC per request for the current synthetic degraded demonstration payload. ${SYNTHETIC_DESCRIPTION} The response contains canned BUY/HOLD/SELL-shaped fields and must not be treated as market research.`,
     docs: "https://github.com/TauricResearch/TradingAgents",
     contact: "jadedfocus@gmail.com",
   }),
 );
 
+function tickerSymbolSchema() {
+  return {
+    type: "string",
+    minLength: 1,
+    maxLength: 10,
+    pattern: "^[A-Za-z0-9.\\-]+$",
+    description: "Public equity or crypto ticker symbol, for example NVDA",
+  };
+}
+
 function analyzeTickerRequestSchema() {
   return {
     type: "object",
     properties: {
-      ticker: {
-        type: "string",
-        description: "Public equity or crypto ticker symbol, for example NVDA",
-      },
+      ticker: tickerSymbolSchema(),
       date: {
         type: "string",
+        pattern: "^\\d{4}-\\d{2}-\\d{2}$",
         description: "Optional analysis date in YYYY-MM-DD format; defaults to today",
       },
       analysts: {
@@ -254,6 +269,15 @@ function analyzeTickerRequestSchema() {
         description: "Optional exact subset of synthetic report roles to return",
       },
     },
+    required: ["ticker"],
+    additionalProperties: false,
+  };
+}
+
+function analyzeArbitrageRequestSchema() {
+  return {
+    type: "object",
+    properties: { ticker: tickerSymbolSchema() },
     required: ["ticker"],
     additionalProperties: false,
   };
@@ -344,6 +368,10 @@ function createReceiptStore(maxEntries = 5000) {
 const receipts = createReceiptStore();
 // duplicate RECEIPT_SECRET removed
 
+const ANALYZE_ARBITRAGE_INPUT_SCHEMA = analyzeArbitrageRequestSchema();
+const ANALYZE_TICKER_INPUT_SCHEMA = analyzeTickerRequestSchema();
+const ANALYZE_TICKER_OUTPUT_SCHEMA = analyzeTickerOutputSchema();
+
 const routesConfig = {
   "POST /api/analyze-arbitrage": {
     accepts: {
@@ -352,8 +380,9 @@ const routesConfig = {
       network: NETWORK,
       payTo: PAY_TO,
     },
-    description: "Run BlockRun.ai-backed arbitrage market consensus. Body: { ticker: string }.",
+    description: `Price ${PRICE} USDC per request. Run BlockRun.ai-backed arbitrage market consensus. Body: { ticker: string }. Not financial advice.`,
     mimeType: "application/json",
+    inputSchema: ANALYZE_ARBITRAGE_INPUT_SCHEMA,
   },
   "POST /api/analyze-ticker": {
     accepts: {
@@ -363,19 +392,19 @@ const routesConfig = {
       payTo: PAY_TO,
     },
     description:
-      `Return the current synthetic degraded ticker demonstration payload. Body: { ticker: string, date?: 'YYYY-MM-DD' (defaults to today), analysts?: string[] (default ['market','social','news','fundamentals']) }. ${SYNTHETIC_DESCRIPTION} Not financial advice.`,
+      `Price ${PRICE} USDC per request. Return the current synthetic degraded ticker demonstration payload. Body: { ticker: string, date?: 'YYYY-MM-DD' (defaults to today), analysts?: string[] (default ['market','social','news','fundamentals']) }. ${SYNTHETIC_DESCRIPTION} Not financial advice.`,
     mimeType: "application/json",
-    inputSchema: analyzeTickerRequestSchema(),
-    outputSchema: analyzeTickerOutputSchema(),
+    inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
+    outputSchema: ANALYZE_TICKER_OUTPUT_SCHEMA,
     extensions: {
       "x-analysis-contract": {
-        inputSchema: analyzeTickerRequestSchema(),
-        outputSchema: analyzeTickerOutputSchema(),
+        inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
+        outputSchema: ANALYZE_TICKER_OUTPUT_SCHEMA,
       },
       ...declareDiscoveryExtension({
         method: "POST",
         bodyType: "json",
-        inputSchema: analyzeTickerRequestSchema(),
+        inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
         input: {
           ticker: "NVDA",
           analysts: ["market", "news", "fundamentals"],
@@ -407,7 +436,7 @@ const routesConfig = {
               risk_review: "Synthetic canned example; no portfolio was analyzed.",
             },
           },
-          schema: analyzeTickerOutputSchema(),
+          schema: ANALYZE_TICKER_OUTPUT_SCHEMA,
         },
       }),
     },
@@ -417,7 +446,7 @@ const routesConfig = {
 registerDiscoveryEndpoints(app, routesConfig, {
   name: "tradingagents",
   title: "TradingAgents x402 — synthetic degraded ticker demonstration",
-  description: `Pay ${PRICE} USDC for the current synthetic degraded demonstration payload. ${SYNTHETIC_DESCRIPTION} The response is not market research.`,
+  description: `Pay ${PRICE} USDC per request for the current synthetic degraded demonstration payload. ${SYNTHETIC_DESCRIPTION} The response is not market research.`,
   contact: "jadedfocus@gmail.com",
   operator: "Royal Agentic Enterprises"
 });
@@ -430,7 +459,7 @@ function originOf(req) {
 function landingHtml(req) {
   const origin = originOf(req);
   const title = "TradingAgents x402 - Synthetic degraded ticker demonstration";
-  const desc = `Paid x402 endpoint. Pay ${PRICE} USDC on Base and POST /api/analyze-ticker for a synthetic degraded demonstration payload. No live market data or TradingAgents execution is used. Configured request roles: market, social, news, fundamentals. No agent transcripts are produced. Not financial advice.`;
+  const desc = `Paid x402 endpoint. Pay ${PRICE} USDC per request on Base and POST /api/analyze-ticker for a synthetic degraded demonstration payload. No live market data or TradingAgents execution is used. Configured request roles: market, social, news, fundamentals. No agent transcripts are produced. Not financial advice.`;
   const favicon =
     "data:image/svg+xml," +
     encodeURIComponent(
@@ -482,7 +511,7 @@ function landingHtml(req) {
 <main>
   <span class="tag">x402 &middot; Base USDC</span>
   <h1>TradingAgents x402</h1>
-  <p>Pay <span class="price">${PRICE} USDC</span> on Base and <code>POST /api/analyze-ticker</code> for the current synthetic, degraded demonstration payload. It uses canned data: no live market data, TradingAgents execution, or agent transcripts.</p>
+  <p>Pay <span class="price">${PRICE} USDC per request</span> on Base and <code>POST /api/analyze-ticker</code> for the current synthetic, degraded demonstration payload. It uses canned data: no live market data, TradingAgents execution, or agent transcripts.</p>
   <p>Configured synthetic report roles: <code>market</code>, <code>social</code>, <code>news</code>, and <code>fundamentals</code>. The optional <code>analysts</code> array controls which synthetic role report fields are returned; it does not run those roles.</p>
   <h2>Endpoint</h2>
   <pre>POST ${origin}/api/analyze-ticker
@@ -505,6 +534,19 @@ X-Payment: &lt;x402 payment&gt;
 }
 
 app.get("/", (req, res) => res.type("html").send(landingHtml(req)));
+const ajv = new Ajv({ allErrors: true, strict: false });
+const requestValidators = new Map(
+  Object.entries(routesConfig).map(([routeKey, route]) => [routeKey, ajv.compile(route.inputSchema)]),
+);
+app.use((req, res, next) => {
+  const validate = requestValidators.get(`${req.method} ${req.path}`);
+  if (!validate || validate(req.body)) return next();
+  return res.status(400).json({
+    ok: false,
+    error: "request body does not match the published schema",
+    details: validate.errors,
+  });
+});
 app.use((req, res, next) => {
   const paidRoute = Object.keys(routesConfig).some((routeKey) => {
     const [method, path] = routeKey.split(" ");
@@ -591,12 +633,6 @@ app.use((req, res, next) => {
 
 app.post("/api/analyze-ticker", async (req, res) => {
   const { ticker, date } = req.body || {};
-  if (!ticker || typeof ticker !== "string" || !/^[A-Za-z0-9.\-]{1,10}$/.test(ticker)) {
-    return res.status(400).json({ ok: false, error: "invalid ticker" });
-  }
-  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return res.status(400).json({ ok: false, error: "date must be YYYY-MM-DD" });
-  }
   const configuredRoles = req.configuredRoles;
   try {
     const result = await runAnalyze({ ticker: ticker.toUpperCase(), date, analysts: configuredRoles });
@@ -618,10 +654,7 @@ const { synthesizeMarketReport } = require("./blockrun-arbitrage");
 
 app.post("/api/analyze-arbitrage", async (req, res) => {
   const { ticker } = req.body || {};
-  if (!ticker || typeof ticker !== "string" || !/^[A-Za-z0-9.\-]{1,10}$/.test(ticker)) {
-    return res.status(400).json({ ok: false, error: "invalid ticker" });
-  }
-  
+
   const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
   const cached = paymentSignature && receipts.lookup(paymentSignature);
   if (cached) {

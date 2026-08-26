@@ -126,9 +126,10 @@ test("paid route returns 503 until facilitator is ready and 402 afterward", asyn
     assert.equal(invalidRoles.status, 400, JSON.stringify(analysts));
     assert.equal(invalidRoles.headers.get("payment-required"), null);
     assert.equal(invalidRoles.headers.get("x-payment"), null);
-    assert.deepEqual(await invalidRoles.json(), {
-      ok: false,
-      error: "analysts must be a non-empty array of unique allowed roles",
-    });
+    const invalidPayload = await invalidRoles.json();
+    assert.equal(invalidPayload.ok, false);
+    assert.equal(invalidPayload.error, "request body does not match the published schema");
+    assert.ok(Array.isArray(invalidPayload.details));
+    assert.ok(invalidPayload.details.length > 0);
   }
 });

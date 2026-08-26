@@ -4,8 +4,9 @@
 POST `{"ticker":"BTC"}` to `https://tradingagents-x402.fly.dev/api/analyze-ticker` and receive a canned BUY/HOLD/SELL-shaped **synthetic, degraded demonstration payload**. The current implementation does not execute TradingAgents, retrieve live market data, or provide agent transcripts. The four configured synthetic report roles are `market`, `social`, `news`, and `fundamentals`. The optional `analysts` array controls which synthetic role report fields are returned; the current path does not run those roles. Do not treat the response as market research or a trading signal.
 
 ## Price
-$0.05 USDC exact on Base mainnet (network `eip155:8453`). Verify the live
-HTTP 402 challenge before signing and reject any request above this amount.
+$0.05 USDC per request on Base mainnet (network `eip155:8453`). Payment settles
+before downstream completion. Verify the live HTTP 402 challenge before signing
+and reject any request above this amount.
 
 ## Step 1 — verify the service
 Run these four commands before paying:

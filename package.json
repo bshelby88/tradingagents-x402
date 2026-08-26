@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node test_docs_current.js && node test_toon.js && node --test test_runtime_config.js test_public_discovery.js test_public_surfaces.js test_startup.js test_landing_page.js test_truthful_output.js"
+    "test": "node test_docs_current.js && node test_toon.js && node --test test_runtime_config.js test_public_discovery.js test_public_surfaces.js test_startup.js test_landing_page.js test_truthful_output.js test_customer_surfaces.js test_prepayment_validation.js"
   },
   "license": "ISC",
   "dependencies": {
@@ -14,6 +14,7 @@
     "@x402/evm": "^2.12.0",
     "@x402/express": "^2.12.0",
     "@x402/extensions": "^2.12.0",
+    "ajv": "^8.20.0",
     "express": "^5.2.1"
   },
   "overrides": {
