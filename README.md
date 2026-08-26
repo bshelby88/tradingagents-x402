@@ -22,12 +22,10 @@ rm -rf engine/.git engine/.venv
 
 ## Build + deploy
 
-```bash
-# Re-vendor before deploy
-cp -r ../TradingAgents engine && rm -rf engine/.git engine/.venv
-
-fly deploy --remote-only
-```
+Production deployments run through the repository's reviewed GitHub Actions
+workflow. Re-vendor and test on a feature branch, open a pull request, and let
+the scoped Fly deployment workflow deploy the merged `main` branch. Do not
+manually deploy from a workstation.
 
 ## Secrets
 
@@ -50,7 +48,7 @@ curl -X POST https://tradingagents-x402.fly.dev/api/analyze-ticker \
   -H 'content-type: application/json' \
   -d '{"ticker":"NVDA"}'
 
-# Real call (signed x402 payment header required)
+# Real call (signed x402 payment header required; maximum charge $0.05 USDC)
 # Body: { ticker: string, date?: "YYYY-MM-DD", analysts?: ["market","social","news","fundamentals"] }
 ```
 
