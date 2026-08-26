@@ -1,13 +1,13 @@
 # tradingagents-x402
 
-Paid x402 wrapper for [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) — multi-agent LLM ticker consensus over `POST /api/analyze-ticker`.
+Paid x402 endpoint associated with [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents). **The current `POST /api/analyze-ticker` implementation returns a canned synthetic, degraded demonstration payload. It does not execute TradingAgents, retrieve live market data, or provide agent transcripts.**
 
 - **Price:** `$0.05` USDC unless overridden by `X402_PRICE` as a positive integer in atomic micro-USDC units (`50000` = `$0.05`; 1 USDC = 1,000,000 units). Invalid, fractional, or non-finite values stop startup.
 - **Network:** production uses Base mainnet (`eip155:8453`) with the Coinbase CDP facilitator
-- **Backbone:** Claude Haiku 4.5 (deep + quick), debate rounds=1, risk rounds=1
+- **Configured request roles:** `market`, `social`, `news`, `fundamentals` (the current synthetic response does not run them)
 - **Live at:** https://tradingagents-x402.fly.dev
 
-**Evaluate before paying:** inspect the [landing page](https://tradingagents-x402.fly.dev/), [OpenAPI document](https://tradingagents-x402.fly.dev/openapi.json), [machine-readable pricing](https://tradingagents-x402.fly.dev/pricing.md), and [live x402 manifest](https://tradingagents-x402.fly.dev/.well-known/x402.json). Output is research, not financial advice; review sources and assumptions before acting.
+**Evaluate before paying:** inspect the [landing page](https://tradingagents-x402.fly.dev/), [OpenAPI document](https://tradingagents-x402.fly.dev/openapi.json), [machine-readable pricing](https://tradingagents-x402.fly.dev/pricing.md), and [live x402 manifest](https://tradingagents-x402.fly.dev/.well-known/x402.json). Output is a synthetic demonstration, not research or financial advice.
 
 ## Vendor
 
@@ -50,6 +50,7 @@ curl -X POST https://tradingagents-x402.fly.dev/api/analyze-ticker \
 
 # Real call (signed x402 payment header required; maximum charge $0.05 USDC)
 # Body: { ticker: string, date?: "YYYY-MM-DD", analysts?: ["market","social","news","fundamentals"] }
+# Current result is synthetic and degraded; no live analysis is performed.
 ```
 
 ## Revenue ledger

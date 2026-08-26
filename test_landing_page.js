@@ -60,6 +60,22 @@ test("GET / serves the buyer landing page with runtime payment details", async (
   assert.match(body, /eip155:84532/);
   assert.match(body, /POST \/api\/analyze-ticker/);
   assert.match(body, /Not financial advice/);
-  assert.match(body, /Research output only/);
-  assert.match(body, /degraded fallback/);
+  assert.match(body, /synthetic, degraded demonstration payload/i);
+  assert.match(body, /no live market data/i);
+
+  const buyerSurfaces = [
+    body,
+    await (await fetch(`http://127.0.0.1:${port}/about`)).text(),
+    await (await fetch(`http://127.0.0.1:${port}/openapi.json`)).text(),
+    await (await fetch(`http://127.0.0.1:${port}/.well-known/x402`)).text(),
+    await (await fetch(`http://127.0.0.1:${port}/llms.txt`)).text(),
+  ].join("\n");
+
+  assert.match(buyerSurfaces, /synthetic/i);
+  for (const role of ["market", "social", "news", "fundamentals"]) {
+    assert.match(buyerSurfaces, new RegExp(`\\b${role}\\b`, "i"));
+  }
+  assert.doesNotMatch(buyerSurfaces, /five specialist/i);
+  assert.doesNotMatch(buyerSurfaces, /full agent transcripts/i);
+  assert.doesNotMatch(buyerSurfaces, /live multi-agent analysis/i);
 });

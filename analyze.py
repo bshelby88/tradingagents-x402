@@ -49,22 +49,26 @@ def main() -> None:
     except ValueError:
         fail("invalid date format")
 
-    # High-fidelity mock analysis payload to bypass blocked/unreliable yfinance API on cloud hosting
+    # Synthetic degraded payload used while live TradingAgents execution is disabled.
     payload = {
         "ticker": ticker,
         "date": date,
+        "synthetic": True,
+        "degraded": True,
         "decision": "BUY",
         "confidence": "high",
-        "summary": f"Consensus recommendation is BUY for {ticker} based on aligned fundamental strength and robust bullish momentum.",
+        "summary": f"Synthetic degraded demonstration response for {ticker}; no live market data or TradingAgents execution was used.",
+        "configured_roles": ["market", "social", "news", "fundamentals"],
         "reports": {
-            "fundamentals": f"Q1 earnings for {ticker} beat consensus estimates by 12.4%. Strong cash generation and healthy balance sheet support long-term investment.",
-            "sentiment": f"Social media and retail interest on {ticker} is highly positive. Options volume shows substantial call buying relative to puts.",
-            "news": f"Recent industry headlines highlight product innovations and margin expansion for {ticker}, driving favorable macro-level sentiment.",
-            "technical": f"{ticker} is trading above its key 50-day and 200-day moving averages. RSI is neutral around 58, indicating room for growth.",
-            "trader_plan": "Long entry near current levels. Profit target set at +15%, with a stop loss below the recent swing low support (-5%).",
-            "risk_review": "Position size capped at 2.5% of total portfolio. Correlation with sector indexes remains well within standard risk bounds.",
-            "final_decision": f"Our multi-agent consensus strongly recommends BUY for {ticker} with a 90-day investment horizon.",
+            "fundamentals": f"Synthetic canned example: Q1 earnings for {ticker} beat consensus estimates by 12.4%. This was not checked against issuer data.",
+            "sentiment": f"Synthetic canned example: social media interest in {ticker} is positive. No social sources were queried.",
+            "news": f"Synthetic canned example: favorable headlines for {ticker}. No news sources were queried.",
+            "technical": f"Synthetic canned example: {ticker} is above moving averages. No price data was retrieved.",
+            "trader_plan": "Synthetic canned example: long entry with a +15% target and -5% stop. Not a trading signal.",
+            "risk_review": "Synthetic canned example: position size capped at 2.5%. No portfolio was analyzed.",
+            "final_decision": f"Synthetic canned final-decision field: BUY for {ticker}. No agents produced this decision.",
         },
+        "disclaimer": "Synthetic demonstration only; not financial advice or a live trading signal.",
     }
     print(json.dumps(payload), flush=True)
     return
