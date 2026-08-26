@@ -484,6 +484,7 @@ X-Payment: &lt;x402 payment&gt;
 </html>`;
 }
 
+app.get("/", (req, res) => res.type("html").send(landingHtml(req)));
 app.use(paymentMiddleware(routesConfig, x402Server, undefined, undefined, false));
 
 function runAnalyze({ ticker, date, analysts }) {
