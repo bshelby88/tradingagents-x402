@@ -15,7 +15,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 # Service code
-COPY index.js toon_middleware.js analyze.py blockrun-arbitrage.js ./
+COPY index.js toon_middleware.js public-discovery.js runtime-config.js analysis-contract.js analyze.py blockrun-arbitrage.js ./
 RUN chmod +x analyze.py
 
 ENV TRADINGAGENTS_DIR=/app/TradingAgents

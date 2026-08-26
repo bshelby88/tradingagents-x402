@@ -6,6 +6,12 @@ const { paymentMiddleware } = require("@x402/express");
 const { x402ResourceServer, HTTPFacilitatorClient } = require("@x402/core/server");
 const { ExactEvmScheme } = require("@x402/evm/exact/server");
 const { declareDiscoveryExtension } = require("@x402/extensions/bazaar");
+const { configuredPrice } = require("./runtime-config");
+const {
+  ALLOWED_ROLES: CONFIGURED_ROLES,
+  fallbackAnalysis,
+  normalizeAnalysts,
+} = require("./analysis-contract");
 
 const PAY_TO = process.env.X402_PAY_TO;
 if (!PAY_TO) {
@@ -17,6 +23,7 @@ const TRADINGAGENTS_DIR = process.env.TRADINGAGENTS_DIR || "/app/TradingAgents";
 const PYTHON = process.env.PYTHON_BIN || "python3";
 const ANALYZE_SCRIPT = process.env.ANALYZE_SCRIPT || "/app/analyze.py";
 const ANALYSIS_TIMEOUT_MS = Number(process.env.ANALYSIS_TIMEOUT_MS || 90000);
+const PRICE = configuredPrice(process.env.X402_PRICE);
 
 // CDP secret base64 hop
 if (process.env.CDP_API_KEY_SECRET_B64) {
@@ -25,6 +32,8 @@ if (process.env.CDP_API_KEY_SECRET_B64) {
 
 const HAS_CDP = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
 const NETWORK = HAS_CDP ? "eip155:8453" : "eip155:84532";
+const SYNTHETIC_DESCRIPTION =
+  "Current implementation returns a synthetic, degraded demonstration response; it does not execute TradingAgents or retrieve live market data. Configured synthetic report roles: market, social, news, fundamentals. The optional analysts array controls which synthetic role report fields are returned; it does not run those roles. No agent transcripts are produced.";
 
 let facilitatorClient;
 if (HAS_CDP) {
@@ -32,7 +41,8 @@ if (HAS_CDP) {
   facilitatorClient = new HTTPFacilitatorClient(facilitator);
   console.log("→ Coinbase CDP facilitator (Base mainnet, real USDC)");
 } else {
-  facilitatorClient = new HTTPFacilitatorClient({ url: "https://x402.org/facilitator" });
+  const facilitatorUrl = process.env.X402_FACILITATOR_URL || "https://x402.org/facilitator";
+  facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
   console.log("→ public x402.org facilitator (Base Sepolia testnet — set CDP_API_KEY_ID/SECRET to switch to mainnet)");
 }
 
@@ -43,10 +53,12 @@ x402Server.register(NETWORK, new ExactEvmScheme());
 // paymentMiddleware (5th arg false); pre-warm supported-kinds here with retry/backoff so a
 // transient facilitator blip can never crash boot. Previously the eager initialize() promise
 // rejected unhandled -> Node exit 1 -> Fly restart loop -> machine death after 10 tries.
+let facilitatorReady = false;
 (async () => {
   for (let i = 1; i <= 12; i++) {
     try {
       await x402Server.initialize();
+      facilitatorReady = true;
       console.log(`→ x402 facilitator ready (attempt ${i})`);
       return;
     } catch (e) {
@@ -123,13 +135,12 @@ function registerDiscoveryEndpoints(serverApp, routes, serviceInfo) {
       ...(routeVal.extensions ? { extensions: routeVal.extensions } : {})
     };
 
-    const discoveryExt = routeVal.extensions && routeVal.extensions["x-discovery"];
-    const inputSchema = discoveryExt ? discoveryExt.inputSchema : {
+    const inputSchema = routeVal.inputSchema || {
       type: "object",
       properties: { ticker: { type: "string" } },
       required: ["ticker"]
     };
-    const outputSchema = discoveryExt && discoveryExt.output ? discoveryExt.output.schema : undefined;
+    const outputSchema = routeVal.outputSchema;
 
     const opObj = {
       summary: routeVal.description ? routeVal.description.split(".")[0] : `Endpoint ${path}`,
@@ -190,19 +201,30 @@ app.get("/health", (_req, res) =>
     ok: true,
     status: "ok",
     service: "tradingagents-x402",
-    provider: process.env.TRADINGAGENTS_LLM_PROVIDER || "anthropic",
-    deep: process.env.TRADINGAGENTS_DEEP_THINK_LLM || "claude-haiku-4-5-20251001",
+    outputMode: "synthetic-degraded",
+    configuredRoles: CONFIGURED_ROLES,
+    facilitatorReady,
   }),
 );
 
-const PRICE = process.env.X402_PRICE ? `$${(Number(process.env.X402_PRICE) / 1000000).toFixed(2)}` : "$0.05";
+require("./public-discovery").registerPublicDiscovery(app, {
+  name: "TradingAgents x402",
+  summary: `Buy a synthetic degraded ticker demonstration payload. ${SYNTHETIC_DESCRIPTION}`,
+  baseUrl: "https://tradingagents-x402.fly.dev",
+  endpoint: "/api/analyze-ticker",
+  price: PRICE,
+  network: NETWORK,
+  audience: "integrators evaluating the current x402 response shape, not buyers seeking live market research",
+  disclaimer: "Synthetic demonstration only; not financial advice or a live trading signal.",
+  homepage: false,
+});
 
 app.get("/about", (_req, res) =>
   res.json({
-    service: "TradingAgents — Multi-agent LLM ticker consensus",
+    service: "TradingAgents x402 — synthetic degraded ticker demonstration",
     operator: "Royal Agentic Enterprises",
     description:
-      `Pay ${PRICE} USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).`,
+      `Pay ${PRICE} USDC for the current synthetic degraded demonstration payload. ${SYNTHETIC_DESCRIPTION} The response contains canned BUY/HOLD/SELL-shaped fields and must not be treated as market research.`,
     docs: "https://github.com/TauricResearch/TradingAgents",
     contact: "jadedfocus@gmail.com",
   }),
@@ -224,9 +246,12 @@ function analyzeTickerRequestSchema() {
         type: "array",
         items: {
           type: "string",
-          enum: ["market", "social", "news", "fundamentals"],
+          enum: CONFIGURED_ROLES,
         },
-        description: "Optional analyst modules to run",
+        default: CONFIGURED_ROLES,
+        minItems: 1,
+        uniqueItems: true,
+        description: "Optional exact subset of synthetic report roles to return",
       },
     },
     required: ["ticker"],
@@ -234,28 +259,40 @@ function analyzeTickerRequestSchema() {
   };
 }
 
-function fallbackAnalysis({ ticker, date, analysts }, reason) {
-  const normalizedTicker = String(ticker || "UNKNOWN").toUpperCase();
-  const selectedAnalysts =
-    Array.isArray(analysts) && analysts.length ? analysts : ["market", "news", "fundamentals"];
-
+function analyzeTickerOutputSchema() {
   return {
-    ticker: normalizedTicker,
-    date: date || new Date().toISOString().slice(0, 10),
-    decision: "HOLD",
-    confidence: "low",
-    summary:
-      "The live multi-agent analyzer did not complete before the service timeout. Returned a conservative HOLD placeholder instead of a failed paid response.",
-    reports: {
-      market:
-        "Fallback mode: no live market data was analyzed. Treat this as a service-availability receipt, not a trading signal.",
-      news: "Fallback mode: no current news scan completed.",
-      fundamentals: "Fallback mode: no issuer fundamentals were analyzed.",
-      selected_analysts: selectedAnalysts,
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    properties: {
+      ok: { type: "boolean" },
+      ticker: { type: "string" },
+      date: { type: "string" },
+      decision: { type: "string", enum: ["BUY", "HOLD", "SELL"] },
+      confidence: { type: "string" },
+      summary: { type: "string" },
+      synthetic: { type: "boolean", const: true },
+      degraded: { type: "boolean" },
+      configured_roles: {
+        type: "array",
+        minItems: 1,
+        uniqueItems: true,
+        items: { type: "string", enum: CONFIGURED_ROLES },
+      },
+      reports: { type: "object" },
+      error: { type: "string" },
     },
-    degraded: true,
-    error: String(reason || "analysis unavailable").slice(0, 240),
-    disclaimer: "Not financial advice. Degraded fallback only; run again later for live multi-agent analysis.",
+    required: [
+      "ok",
+      "ticker",
+      "date",
+      "decision",
+      "confidence",
+      "summary",
+      "synthetic",
+      "degraded",
+      "configured_roles",
+      "reports",
+    ],
   };
 }
 
@@ -326,9 +363,15 @@ const routesConfig = {
       payTo: PAY_TO,
     },
     description:
-      "Run a full multi-agent analysis for any publicly traded ticker. Body: { ticker: string, date?: 'YYYY-MM-DD' (defaults to today), analysts?: string[] (default ['market','social','news','fundamentals']) }. Returns final BUY/HOLD/SELL decision, confidence, structured rationale, and per-agent reports. Uses Claude Haiku 4.5 for cost-efficient deep+quick reasoning; debate rounds=1, risk rounds=1. End-to-end latency typically 60-180s. Not financial advice — research output only.",
+      `Return the current synthetic degraded ticker demonstration payload. Body: { ticker: string, date?: 'YYYY-MM-DD' (defaults to today), analysts?: string[] (default ['market','social','news','fundamentals']) }. ${SYNTHETIC_DESCRIPTION} Not financial advice.`,
     mimeType: "application/json",
+    inputSchema: analyzeTickerRequestSchema(),
+    outputSchema: analyzeTickerOutputSchema(),
     extensions: {
+      "x-analysis-contract": {
+        inputSchema: analyzeTickerRequestSchema(),
+        outputSchema: analyzeTickerOutputSchema(),
+      },
       ...declareDiscoveryExtension({
         method: "POST",
         bodyType: "json",
@@ -350,33 +393,21 @@ const routesConfig = {
             ok: true,
             ticker: "NVDA",
             date: "2026-05-15",
+            synthetic: true,
+            degraded: true,
             decision: "BUY",
             confidence: "high",
-            summary: "Strong fundamentals, bullish momentum, positive sentiment despite macro headwinds.",
+            summary: "Synthetic degraded demonstration response for NVDA; no live market data or TradingAgents execution was used.",
+            configured_roles: ["market", "news", "fundamentals"],
             reports: {
-              fundamentals: "Q1 earnings beat by 12%...",
-              sentiment: "StockTwits bull/bear ratio 3.2:1...",
-              news: "Data-center capex guidance upgraded...",
-              technical: "Above 50/200 SMA, RSI 62...",
-              trader_plan: "Long entry $920, target $1080, stop $880",
-              risk_review: "Position size capped at 3% portfolio",
+              fundamentals: "Synthetic canned example; no issuer data was checked.",
+              news: "Synthetic canned example; no news sources were queried.",
+              technical: "Synthetic canned example; no price data was retrieved.",
+              trader_plan: "Synthetic canned example; not a trading signal.",
+              risk_review: "Synthetic canned example; no portfolio was analyzed.",
             },
           },
-          schema: {
-            $schema: "https://json-schema.org/draft/2020-12/schema",
-            type: "object",
-            properties: {
-              ok: { type: "boolean" },
-              ticker: { type: "string" },
-              date: { type: "string" },
-              decision: { type: "string", enum: ["BUY", "HOLD", "SELL"] },
-              confidence: { type: "string" },
-              summary: { type: "string" },
-              reports: { type: "object" },
-              error: { type: "string" },
-            },
-            required: ["ok"],
-          },
+          schema: analyzeTickerOutputSchema(),
         },
       }),
     },
@@ -385,8 +416,8 @@ const routesConfig = {
 
 registerDiscoveryEndpoints(app, routesConfig, {
   name: "tradingagents",
-  title: "TradingAgents — Multi-agent LLM ticker consensus",
-  description: `Pay ${PRICE} USDC, get a structured multi-agent trading recommendation for any ticker. Five specialist analysts (fundamentals / sentiment / news / technicals), bullish-vs-bearish researcher debate, trader synthesis, risk-management review, portfolio-manager final decision. Returns BUY/HOLD/SELL with confidence, rationale, and full agent transcripts. Powered by the open-source TradingAgents framework (arXiv:2412.20138).`,
+  title: "TradingAgents x402 — synthetic degraded ticker demonstration",
+  description: `Pay ${PRICE} USDC for the current synthetic degraded demonstration payload. ${SYNTHETIC_DESCRIPTION} The response is not market research.`,
   contact: "jadedfocus@gmail.com",
   operator: "Royal Agentic Enterprises"
 });
@@ -398,8 +429,8 @@ function originOf(req) {
 
 function landingHtml(req) {
   const origin = originOf(req);
-  const title = "TradingAgents x402 - Multi-agent LLM ticker consensus";
-  const desc = `Paid x402 endpoint. Pay ${PRICE} USDC on Base and POST /api/analyze-ticker for a structured multi-agent trading recommendation: five specialist analysts (fundamentals, sentiment, news, technicals), bullish vs bearish researcher debate, trader synthesis, risk review, and a final BUY/HOLD/SELL decision with confidence and rationale. Powered by the open-source TradingAgents framework (arXiv:2412.20138). Not financial advice.`;
+  const title = "TradingAgents x402 - Synthetic degraded ticker demonstration";
+  const desc = `Paid x402 endpoint. Pay ${PRICE} USDC on Base and POST /api/analyze-ticker for a synthetic degraded demonstration payload. No live market data or TradingAgents execution is used. Configured request roles: market, social, news, fundamentals. No agent transcripts are produced. Not financial advice.`;
   const favicon =
     "data:image/svg+xml," +
     encodeURIComponent(
@@ -451,14 +482,15 @@ function landingHtml(req) {
 <main>
   <span class="tag">x402 &middot; Base USDC</span>
   <h1>TradingAgents x402</h1>
-  <p>Multi-agent LLM ticker consensus as a paid <code>x402</code> endpoint. Pay <span class="price">${PRICE} USDC</span> on Base and <code>POST /api/analyze-ticker</code> for a structured BUY/HOLD/SELL decision with confidence, rationale, and full agent transcripts.</p>
+  <p>Pay <span class="price">${PRICE} USDC</span> on Base and <code>POST /api/analyze-ticker</code> for the current synthetic, degraded demonstration payload. It uses canned data: no live market data, TradingAgents execution, or agent transcripts.</p>
+  <p>Configured synthetic report roles: <code>market</code>, <code>social</code>, <code>news</code>, and <code>fundamentals</code>. The optional <code>analysts</code> array controls which synthetic role report fields are returned; it does not run those roles.</p>
   <h2>Endpoint</h2>
   <pre>POST ${origin}/api/analyze-ticker
 Content-Type: application/json
 X-Payment: &lt;x402 payment&gt;
 
 { "ticker": "NVDA" }</pre>
-  <p>Optional: <code>{ "ticker": "NVDA", "date": "2026-05-15", "analysts": ["market","news","fundamentals"] }</code>. Latency is typically 60-180s.</p>
+  <p>Optional: <code>{ "ticker": "NVDA", "date": "2026-05-15", "analysts": ["market","social","news","fundamentals"] }</code>.</p>
   <h2>Discovery</h2>
   <ul>
     <li><a href="/openapi.json">OpenAPI 3.0 spec</a></li>
@@ -466,12 +498,34 @@ X-Payment: &lt;x402 payment&gt;
     <li><a href="/about">About</a> &middot; <a href="/health">Health</a></li>
   </ul>
   <p>Network: <code>${NETWORK}</code> &middot; Operator: Royal Agentic Enterprises</p>
-  <p style="opacity:.7">Not financial advice. Research output only; a degraded fallback may be returned if the live analyzer times out.</p>
+  <p style="opacity:.7">Not financial advice. Synthetic degraded demonstration only; do not treat it as a trading signal.</p>
 </main>
 </body>
 </html>`;
 }
 
+app.get("/", (req, res) => res.type("html").send(landingHtml(req)));
+app.use((req, res, next) => {
+  const paidRoute = Object.keys(routesConfig).some((routeKey) => {
+    const [method, path] = routeKey.split(" ");
+    return req.method === method && req.path === path;
+  });
+  if (!paidRoute || facilitatorReady) return next();
+  res.setHeader("Retry-After", "1");
+  return res.status(503).json({
+    ok: false,
+    error: "payment facilitator is still initializing; retry shortly",
+  });
+});
+app.use((req, res, next) => {
+  if (req.method !== "POST" || req.path !== "/api/analyze-ticker") return next();
+  try {
+    req.configuredRoles = normalizeAnalysts(req.body && req.body.analysts);
+    return next();
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message });
+  }
+});
 app.use(paymentMiddleware(routesConfig, x402Server, undefined, undefined, false));
 
 function runAnalyze({ ticker, date, analysts }) {
@@ -536,18 +590,16 @@ app.use((req, res, next) => {
 });
 
 app.post("/api/analyze-ticker", async (req, res) => {
-  const { ticker, date, analysts } = req.body || {};
+  const { ticker, date } = req.body || {};
   if (!ticker || typeof ticker !== "string" || !/^[A-Za-z0-9.\-]{1,10}$/.test(ticker)) {
     return res.status(400).json({ ok: false, error: "invalid ticker" });
   }
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return res.status(400).json({ ok: false, error: "date must be YYYY-MM-DD" });
   }
-  if (analysts && (!Array.isArray(analysts) || analysts.some((a) => typeof a !== "string"))) {
-    return res.status(400).json({ ok: false, error: "analysts must be array of strings" });
-  }
+  const configuredRoles = req.configuredRoles;
   try {
-    const result = await runAnalyze({ ticker: ticker.toUpperCase(), date, analysts });
+    const result = await runAnalyze({ ticker: ticker.toUpperCase(), date, analysts: configuredRoles });
     const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
     const cached = paymentSignature ? receipts.lookup(paymentSignature) : null;
     if (cached) return res.json({ ok: true, replay: true, receipt: { payload: cached.payload, signature: receipts.record(paymentSignature, cached.response, RECEIPT_SECRET).signature }, ...cached.response });
@@ -555,7 +607,7 @@ app.post("/api/analyze-ticker", async (req, res) => {
     res.json({ ok: true, receipt, ...result });
   } catch (e) {
     console.error("analyze failure:", e.message);
-    const fallback = fallbackAnalysis({ ticker, date, analysts }, e.message);
+    const fallback = fallbackAnalysis({ ticker, date, analysts: configuredRoles }, e.message);
     const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
     const receipt = receipts.record(paymentSignature, fallback, RECEIPT_SECRET);
     res.json({ ok: true, receipt, ...fallback });

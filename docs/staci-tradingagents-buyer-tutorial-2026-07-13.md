@@ -1,7 +1,7 @@
-# How to buy a TradingAgents analysis
+# How to buy the current TradingAgents x402 demonstration payload
 
 ## What you get
-POST `{"ticker":"BTC"}` to `https://tradingagents-x402.fly.dev/api/analyze-ticker` and receive a structured BUY/HOLD/SELL recommendation with per-agent reasoning.
+POST `{"ticker":"BTC"}` to `https://tradingagents-x402.fly.dev/api/analyze-ticker` and receive a canned BUY/HOLD/SELL-shaped **synthetic, degraded demonstration payload**. The current implementation does not execute TradingAgents, retrieve live market data, or provide agent transcripts. The four configured synthetic report roles are `market`, `social`, `news`, and `fundamentals`. The optional `analysts` array controls which synthetic role report fields are returned; the current path does not run those roles. Do not treat the response as market research or a trading signal.
 
 ## Price
 $0.05 USDC exact on Base mainnet (network `eip155:8453`). Verify the live

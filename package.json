@@ -1,11 +1,11 @@
 {
   "name": "tradingagents-x402",
   "version": "1.0.0",
-  "description": "Paid x402 endpoint wrapping TradingAgents multi-agent LLM trading consensus",
+  "description": "Paid x402 endpoint currently returning a synthetic degraded ticker demonstration payload",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node test_docs_current.js && node test_toon.js"
+    "test": "node test_docs_current.js && node test_toon.js && node --test test_runtime_config.js test_public_discovery.js test_public_surfaces.js test_startup.js test_landing_page.js test_truthful_output.js"
   },
   "license": "ISC",
   "dependencies": {
