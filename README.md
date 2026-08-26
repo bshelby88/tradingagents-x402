@@ -4,7 +4,7 @@ Paid x402 endpoint associated with [TauricResearch/TradingAgents](https://github
 
 - **Price:** `$0.05` USDC unless overridden by `X402_PRICE` as a positive integer in atomic micro-USDC units (`50000` = `$0.05`; 1 USDC = 1,000,000 units). Invalid, fractional, or non-finite values stop startup.
 - **Network:** production uses Base mainnet (`eip155:8453`) with the Coinbase CDP facilitator
-- **Configured request roles:** `market`, `social`, `news`, `fundamentals` (the current synthetic response does not run them)
+- **Configured synthetic report roles:** `market`, `social`, `news`, `fundamentals`. The optional `analysts` array controls which synthetic role report fields are returned; the current path does not run those roles.
 - **Live at:** https://tradingagents-x402.fly.dev
 
 **Evaluate before paying:** inspect the [landing page](https://tradingagents-x402.fly.dev/), [OpenAPI document](https://tradingagents-x402.fly.dev/openapi.json), [machine-readable pricing](https://tradingagents-x402.fly.dev/pricing.md), and [live x402 manifest](https://tradingagents-x402.fly.dev/.well-known/x402.json). Output is a synthetic demonstration, not research or financial advice.

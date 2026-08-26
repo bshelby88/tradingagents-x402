@@ -7,6 +7,11 @@ const { x402ResourceServer, HTTPFacilitatorClient } = require("@x402/core/server
 const { ExactEvmScheme } = require("@x402/evm/exact/server");
 const { declareDiscoveryExtension } = require("@x402/extensions/bazaar");
 const { configuredPrice } = require("./runtime-config");
+const {
+  ALLOWED_ROLES: CONFIGURED_ROLES,
+  fallbackAnalysis,
+  normalizeAnalysts,
+} = require("./analysis-contract");
 
 const PAY_TO = process.env.X402_PAY_TO;
 if (!PAY_TO) {
@@ -27,9 +32,8 @@ if (process.env.CDP_API_KEY_SECRET_B64) {
 
 const HAS_CDP = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
 const NETWORK = HAS_CDP ? "eip155:8453" : "eip155:84532";
-const CONFIGURED_ROLES = ["market", "social", "news", "fundamentals"];
 const SYNTHETIC_DESCRIPTION =
-  "Current implementation returns a synthetic, degraded demonstration response; it does not execute TradingAgents or retrieve live market data. Configured request roles: market, social, news, fundamentals. No agent transcripts are produced.";
+  "Current implementation returns a synthetic, degraded demonstration response; it does not execute TradingAgents or retrieve live market data. Configured synthetic report roles: market, social, news, fundamentals. The optional analysts array controls which synthetic role report fields are returned; it does not run those roles. No agent transcripts are produced.";
 
 let facilitatorClient;
 if (HAS_CDP) {
@@ -131,13 +135,12 @@ function registerDiscoveryEndpoints(serverApp, routes, serviceInfo) {
       ...(routeVal.extensions ? { extensions: routeVal.extensions } : {})
     };
 
-    const discoveryExt = routeVal.extensions && routeVal.extensions["x-discovery"];
-    const inputSchema = discoveryExt ? discoveryExt.inputSchema : {
+    const inputSchema = routeVal.inputSchema || {
       type: "object",
       properties: { ticker: { type: "string" } },
       required: ["ticker"]
     };
-    const outputSchema = discoveryExt && discoveryExt.output ? discoveryExt.output.schema : undefined;
+    const outputSchema = routeVal.outputSchema;
 
     const opObj = {
       summary: routeVal.description ? routeVal.description.split(".")[0] : `Endpoint ${path}`,
@@ -243,9 +246,12 @@ function analyzeTickerRequestSchema() {
         type: "array",
         items: {
           type: "string",
-          enum: ["market", "social", "news", "fundamentals"],
+          enum: CONFIGURED_ROLES,
         },
-        description: "Optional analyst modules to run",
+        default: CONFIGURED_ROLES,
+        minItems: 1,
+        uniqueItems: true,
+        description: "Optional exact subset of synthetic report roles to return",
       },
     },
     required: ["ticker"],
@@ -253,28 +259,40 @@ function analyzeTickerRequestSchema() {
   };
 }
 
-function fallbackAnalysis({ ticker, date, analysts }, reason) {
-  const normalizedTicker = String(ticker || "UNKNOWN").toUpperCase();
-  const selectedAnalysts =
-    Array.isArray(analysts) && analysts.length ? analysts : ["market", "news", "fundamentals"];
-
+function analyzeTickerOutputSchema() {
   return {
-    ticker: normalizedTicker,
-    date: date || new Date().toISOString().slice(0, 10),
-    decision: "HOLD",
-    confidence: "low",
-    summary:
-      "The analyzer did not complete before the service timeout. Returned a conservative synthetic HOLD placeholder instead of a failed paid response.",
-    reports: {
-      market:
-        "Fallback mode: no live market data was analyzed. Treat this as a service-availability receipt, not a trading signal.",
-      news: "Fallback mode: no current news scan completed.",
-      fundamentals: "Fallback mode: no issuer fundamentals were analyzed.",
-      selected_analysts: selectedAnalysts,
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    type: "object",
+    properties: {
+      ok: { type: "boolean" },
+      ticker: { type: "string" },
+      date: { type: "string" },
+      decision: { type: "string", enum: ["BUY", "HOLD", "SELL"] },
+      confidence: { type: "string" },
+      summary: { type: "string" },
+      synthetic: { type: "boolean", const: true },
+      degraded: { type: "boolean" },
+      configured_roles: {
+        type: "array",
+        minItems: 1,
+        uniqueItems: true,
+        items: { type: "string", enum: CONFIGURED_ROLES },
+      },
+      reports: { type: "object" },
+      error: { type: "string" },
     },
-    degraded: true,
-    error: String(reason || "analysis unavailable").slice(0, 240),
-    disclaimer: "Not financial advice. Synthetic degraded fallback only; no live analysis was performed.",
+    required: [
+      "ok",
+      "ticker",
+      "date",
+      "decision",
+      "confidence",
+      "summary",
+      "synthetic",
+      "degraded",
+      "configured_roles",
+      "reports",
+    ],
   };
 }
 
@@ -347,7 +365,13 @@ const routesConfig = {
     description:
       `Return the current synthetic degraded ticker demonstration payload. Body: { ticker: string, date?: 'YYYY-MM-DD' (defaults to today), analysts?: string[] (default ['market','social','news','fundamentals']) }. ${SYNTHETIC_DESCRIPTION} Not financial advice.`,
     mimeType: "application/json",
+    inputSchema: analyzeTickerRequestSchema(),
+    outputSchema: analyzeTickerOutputSchema(),
     extensions: {
+      "x-analysis-contract": {
+        inputSchema: analyzeTickerRequestSchema(),
+        outputSchema: analyzeTickerOutputSchema(),
+      },
       ...declareDiscoveryExtension({
         method: "POST",
         bodyType: "json",
@@ -374,34 +398,16 @@ const routesConfig = {
             decision: "BUY",
             confidence: "high",
             summary: "Synthetic degraded demonstration response for NVDA; no live market data or TradingAgents execution was used.",
-            configured_roles: CONFIGURED_ROLES,
+            configured_roles: ["market", "news", "fundamentals"],
             reports: {
               fundamentals: "Synthetic canned example; no issuer data was checked.",
-              sentiment: "Synthetic canned example; no social sources were queried.",
               news: "Synthetic canned example; no news sources were queried.",
               technical: "Synthetic canned example; no price data was retrieved.",
               trader_plan: "Synthetic canned example; not a trading signal.",
               risk_review: "Synthetic canned example; no portfolio was analyzed.",
             },
           },
-          schema: {
-            $schema: "https://json-schema.org/draft/2020-12/schema",
-            type: "object",
-            properties: {
-              ok: { type: "boolean" },
-              ticker: { type: "string" },
-              date: { type: "string" },
-              decision: { type: "string", enum: ["BUY", "HOLD", "SELL"] },
-              confidence: { type: "string" },
-              summary: { type: "string" },
-              synthetic: { type: "boolean" },
-              degraded: { type: "boolean" },
-              configured_roles: { type: "array", items: { type: "string" } },
-              reports: { type: "object" },
-              error: { type: "string" },
-            },
-            required: ["ok"],
-          },
+          schema: analyzeTickerOutputSchema(),
         },
       }),
     },
@@ -477,7 +483,7 @@ function landingHtml(req) {
   <span class="tag">x402 &middot; Base USDC</span>
   <h1>TradingAgents x402</h1>
   <p>Pay <span class="price">${PRICE} USDC</span> on Base and <code>POST /api/analyze-ticker</code> for the current synthetic, degraded demonstration payload. It uses canned data: no live market data, TradingAgents execution, or agent transcripts.</p>
-  <p>Configured request roles: <code>market</code>, <code>social</code>, <code>news</code>, and <code>fundamentals</code>.</p>
+  <p>Configured synthetic report roles: <code>market</code>, <code>social</code>, <code>news</code>, and <code>fundamentals</code>. The optional <code>analysts</code> array controls which synthetic role report fields are returned; it does not run those roles.</p>
   <h2>Endpoint</h2>
   <pre>POST ${origin}/api/analyze-ticker
 Content-Type: application/json
@@ -510,6 +516,15 @@ app.use((req, res, next) => {
     ok: false,
     error: "payment facilitator is still initializing; retry shortly",
   });
+});
+app.use((req, res, next) => {
+  if (req.method !== "POST" || req.path !== "/api/analyze-ticker") return next();
+  try {
+    req.configuredRoles = normalizeAnalysts(req.body && req.body.analysts);
+    return next();
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message });
+  }
 });
 app.use(paymentMiddleware(routesConfig, x402Server, undefined, undefined, false));
 
@@ -575,18 +590,16 @@ app.use((req, res, next) => {
 });
 
 app.post("/api/analyze-ticker", async (req, res) => {
-  const { ticker, date, analysts } = req.body || {};
+  const { ticker, date } = req.body || {};
   if (!ticker || typeof ticker !== "string" || !/^[A-Za-z0-9.\-]{1,10}$/.test(ticker)) {
     return res.status(400).json({ ok: false, error: "invalid ticker" });
   }
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return res.status(400).json({ ok: false, error: "date must be YYYY-MM-DD" });
   }
-  if (analysts && (!Array.isArray(analysts) || analysts.some((a) => typeof a !== "string"))) {
-    return res.status(400).json({ ok: false, error: "analysts must be array of strings" });
-  }
+  const configuredRoles = req.configuredRoles;
   try {
-    const result = await runAnalyze({ ticker: ticker.toUpperCase(), date, analysts });
+    const result = await runAnalyze({ ticker: ticker.toUpperCase(), date, analysts: configuredRoles });
     const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
     const cached = paymentSignature ? receipts.lookup(paymentSignature) : null;
     if (cached) return res.json({ ok: true, replay: true, receipt: { payload: cached.payload, signature: receipts.record(paymentSignature, cached.response, RECEIPT_SECRET).signature }, ...cached.response });
@@ -594,7 +607,7 @@ app.post("/api/analyze-ticker", async (req, res) => {
     res.json({ ok: true, receipt, ...result });
   } catch (e) {
     console.error("analyze failure:", e.message);
-    const fallback = fallbackAnalysis({ ticker, date, analysts }, e.message);
+    const fallback = fallbackAnalysis({ ticker, date, analysts: configuredRoles }, e.message);
     const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
     const receipt = receipts.record(paymentSignature, fallback, RECEIPT_SECRET);
     res.json({ ok: true, receipt, ...fallback });

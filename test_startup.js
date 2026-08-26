@@ -20,6 +20,7 @@ test("Docker runtime includes every service startup module", () => {
     "toon_middleware.js",
     "public-discovery.js",
     "runtime-config.js",
+    "analysis-contract.js",
     "analyze.py",
     "blockrun-arbitrage.js",
   ]) {
@@ -109,4 +110,15 @@ test("paid route returns 503 until facilitator is ready and 402 afterward", asyn
     });
     return response.status === 402;
   }, "paid route did not begin issuing payment challenges after facilitator readiness");
+
+  const invalidRoles = await fetch(`http://127.0.0.1:${port}/api/analyze-ticker`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ticker: "NVDA", analysts: ["market", "invalid"] }),
+  });
+  assert.equal(invalidRoles.status, 400);
+  assert.deepEqual(await invalidRoles.json(), {
+    ok: false,
+    error: "analysts must be a non-empty array of unique allowed roles",
+  });
 });
