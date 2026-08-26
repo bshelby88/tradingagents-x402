@@ -451,6 +451,34 @@ registerDiscoveryEndpoints(app, routesConfig, {
   operator: "Royal Agentic Enterprises"
 });
 
+function buyerDocsHtml() {
+  const route = routesConfig["POST /api/analyze-ticker"];
+  const roles = route.inputSchema.properties.analysts.items.enum;
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TradingAgents x402 buyer documentation</title></head><body>
+<main><h1>TradingAgents x402 buyer documentation</h1>
+<p><strong>Synthetic, degraded demonstration only.</strong> The response uses canned data: no live market data or TradingAgents execution. It is not market research and not financial advice.</p>
+<h2>Paid endpoint</h2>
+<p><code>POST /api/analyze-ticker</code> costs <code>${route.accepts.price}</code> USDC per request on <code>${route.accepts.network}</code>.</p>
+<pre>{ "ticker": "NVDA", "analysts": [${roles.map((role) => `"${role}"`).join(", ")}] }</pre>
+<p>The optional <code>analysts</code> array selects synthetic report fields; it does not run analyst agents.</p>
+<h2>Evaluate before paying</h2><ul>
+<li><a href="/sample">Free synthetic sample</a></li>
+<li><a href="/openapi.json">OpenAPI contract</a></li>
+<li><a href="/.well-known/x402.json">x402 manifest</a></li>
+</ul></main></body></html>`;
+}
+
+app.get("/docs", (_req, res) => res.type("html").send(buyerDocsHtml()));
+app.get("/sample", (_req, res) => res.json({
+  ok: true,
+  ...fallbackAnalysis(
+    { ticker: "NVDA", date: "2026-05-15", analysts: CONFIGURED_ROLES },
+    "free canned sample; no analyzer was run",
+  ),
+  summary: "Free canned synthetic degraded HOLD example; no live market data or TradingAgents execution was used.",
+}));
 
 function originOf(req) {
   return `${req.protocol}://${req.get("host")}`;
@@ -522,7 +550,8 @@ X-Payment: &lt;x402 payment&gt;
   <p>Optional: <code>{ "ticker": "NVDA", "date": "2026-05-15", "analysts": ["market","social","news","fundamentals"] }</code>.</p>
   <h2>Discovery</h2>
   <ul>
-    <li><a href="/openapi.json">OpenAPI 3.0 spec</a></li>
+    <li><a href="/docs">Buyer documentation</a> &middot; <a href="/sample">Free synthetic sample</a></li>
+    <li><a href="/openapi.json">OpenAPI 3.1 spec</a></li>
     <li><a href="/.well-known/x402">x402 well-known manifest</a></li>
     <li><a href="/about">About</a> &middot; <a href="/health">Health</a></li>
   </ul>

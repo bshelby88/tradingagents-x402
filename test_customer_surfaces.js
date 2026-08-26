@@ -58,6 +58,7 @@ test("each customer-facing surface independently states per-request billing", as
 
   const liveSurfaces = [
     ["landing page", "/"],
+    ["buyer docs", "/docs"],
     ["llms.txt", "/llms.txt"],
     ["pricing.md", "/pricing.md"],
     ["OpenAPI", "/openapi.json"],
