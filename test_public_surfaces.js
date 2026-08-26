@@ -64,6 +64,11 @@ test("each live public surface independently advertises the truthful role contra
 
   await t.test("OpenAPI", async () => {
     const document = await (await fetch(`${baseUrl}/openapi.json`)).json();
+    assert.equal(
+      document.openapi,
+      "3.1.0",
+      "Draft 2020-12 keywords such as $schema and const require OpenAPI 3.1",
+    );
     const operation = document.paths["/api/analyze-ticker"].post;
     assertRoleInputSchema(operation.requestBody.content["application/json"].schema);
     assertTruthfulOutputSchema(operation.responses["200"].content["application/json"].schema);
