@@ -60,6 +60,14 @@ test("analyzer rejects an invalid role before returning synthetic output", () =>
   assert.deepEqual(payload, { error: "invalid analysts list" });
 });
 
+test("analyzer rejects empty comma-delimited analyst tokens", () => {
+  for (const analysts of ["market,", ",market", "market,,social", "market, ,social"]) {
+    const { result, payload } = runAnalyzer("--analysts", analysts);
+    assert.notEqual(result.status, 0, `${JSON.stringify(analysts)} was accepted`);
+    assert.deepEqual(payload, { error: "invalid analysts list" });
+  }
+});
+
 test("fallback default output includes all roles and truthfulness markers", () => {
   const payload = fallbackAnalysis({ ticker: "nvda" }, "timeout");
   assert.equal(payload.synthetic, true);

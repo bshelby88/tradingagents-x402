@@ -31,10 +31,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def selected_roles(value: str) -> list[str]:
-    roles = [role.strip() for role in value.split(",") if role.strip()]
+    raw_roles = value.split(",")
+    if any(not role.strip() for role in raw_roles):
+        fail("invalid analysts list")
+
+    roles = [role.strip() for role in raw_roles]
     if (
-        not roles
-        or len(set(roles)) != len(roles)
+        len(set(roles)) != len(roles)
         or any(role not in ALLOWED_ROLES for role in roles)
     ):
         fail("invalid analysts list")
