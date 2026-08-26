@@ -2,34 +2,116 @@ name: Fleet Health + 402 Challenge Check
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # every 6 hours
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Health check
+      - name: Check all active x402 services
+        shell: bash
         run: |
-          curl -fsS https://tradingagents-x402.fly.dev/health | jq -e '.status == "ok"'
+          set -uo pipefail
+          declare -a ENTRIES=(
+            "sentry-forge-x402   /api/dispute-pack       500000 common"
+            "nanobanana-x402     /api/generate-image      10000 common"
+            "vault-pro-x402      /api/scaffold-project    50000 common"
+            "power-pack-x402     /api/score-email         10000 common"
+            "suprapack-x402      /api/find-skill          30000 0x7861db4efc14a1ed5dd8c96c528a3796560f1393"
+            "tradingagents-x402  /api/analyze-ticker      50000 common"
+            "nft-alpha-x402      /api/nft-signal          20000 common"
+          )
 
-      - name: Manifest check
-        run: |
-          curl -fsS https://tradingagents-x402.fly.dev/.well-known/x402 | jq -e '.version'
+          FAIL=0
+          COMMON_PAYTO=""
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$TMP_DIR"' EXIT
 
-      - name: 402 challenge check
-        run: |
-          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
-            -X POST https://tradingagents-x402.fly.dev/api/analyze-ticker \
-            -H 'Content-Type: application/json' \
-            -d '{"ticker":"BTC"}')
-          if [ "$STATUS" != "402" ]; then
-            echo "Expected HTTP 402, got $STATUS"
-            exit 1
+          for entry in "${ENTRIES[@]}"; do
+            read -r app endpoint expected_amount expected_payto <<< "$entry"
+            base="https://$app.fly.dev"
+
+            health=$(curl -sS -m 30 -o /dev/null -w '%{http_code}' "$base/health" || echo ERR)
+            if [ "$health" != "200" ]; then
+              echo "::error::$app health=$health"
+              FAIL=1
+              continue
+            fi
+
+            headers="$TMP_DIR/$app.headers"
+            status=$(curl -sS -m 30 -D "$headers" -o /dev/null -w '%{http_code}' \
+              -X POST "$base$endpoint" \
+              -H 'content-type: application/json' \
+              -d '{}')
+            if [ "$status" != "402" ]; then
+              echo "::error::$app expected 402, got $status"
+              FAIL=1
+              continue
+            fi
+
+            challenge=$(awk 'BEGIN{IGNORECASE=1} /^payment-required:/ {sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); print; exit}' "$headers")
+            if [ -z "$challenge" ]; then
+              echo "::error::$app missing payment-required header"
+              FAIL=1
+              continue
+            fi
+
+            if ! decoded=$(printf '%s' "$challenge" | base64 -d 2>/dev/null); then
+              echo "::error::$app payment-required is not valid base64"
+              FAIL=1
+              continue
+            fi
+            if ! network=$(printf '%s' "$decoded" | jq -er '.accepts[0].network') || \
+               ! amount=$(printf '%s' "$decoded" | jq -er '.accepts[0].amount') || \
+               ! payto=$(printf '%s' "$decoded" | jq -er '.accepts[0].payTo'); then
+              echo "::error::$app malformed payment-required metadata"
+              FAIL=1
+              continue
+            fi
+
+            if [ "$network" != "eip155:8453" ]; then
+              echo "::error::$app network=$network"
+              FAIL=1
+              continue
+            fi
+            if [ "$amount" != "$expected_amount" ]; then
+              echo "::error::$app amount=$amount expected=$expected_amount"
+              FAIL=1
+              continue
+            fi
+            if [[ ! "$payto" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+              echo "::error::$app invalid payTo address"
+              FAIL=1
+              continue
+            fi
+
+            if [ "$expected_payto" = "common" ]; then
+              if [ -z "$COMMON_PAYTO" ]; then
+                COMMON_PAYTO="${payto,,}"
+              elif [ "${payto,,}" != "$COMMON_PAYTO" ]; then
+                echo "::error::$app payTo differs from fleet treasury"
+                FAIL=1
+                continue
+              fi
+            elif [ "${payto,,}" != "${expected_payto,,}" ]; then
+              echo "::error::$app payTo differs from expected service wallet"
+              FAIL=1
+              continue
+            fi
+
+            printf 'OK %-22s health=%s network=%s amount=%s\n' "$app" "$health" "$network" "$amount"
+          done
+
+          receipt=$(curl -sS -m 30 'https://tradingagents-x402.fly.dev/api/receipts/verify?receipt=%7B%7D' | jq -r '.valid')
+          if [ "$receipt" != "false" ]; then
+            echo "::error::tradingagents receipt verifier rejected its negative-control test"
+            FAIL=1
           fi
 
-      - name: Receipt verifier check
-        run: |
-          curl -fsS 'https://tradingagents-x402.fly.dev/api/receipts/verify?receipt=%7B%7D' | jq -e '.valid == false'
+          if [ "$FAIL" -ne 0 ]; then
+            echo "::error::Fleet health or x402 metadata drift detected"
+            exit 1
+          fi
+          echo "All 7 active x402 services passed health, challenge, pricing, network, and payTo checks."
