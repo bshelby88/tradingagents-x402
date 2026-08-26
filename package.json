@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node test_docs_current.js && node test_toon.js"
+    "test": "node test_docs_current.js && node test_toon.js && node --test test_runtime_config.js test_public_discovery.js test_startup.js"
   },
   "license": "ISC",
   "dependencies": {

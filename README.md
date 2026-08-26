@@ -2,8 +2,8 @@
 
 Paid x402 wrapper for [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) — multi-agent LLM ticker consensus over `POST /api/analyze-ticker`.
 
-- **Price:** `$0.05` USDC on Base mainnet (`eip155:8453`) unless overridden by `X402_PRICE` in USDC cents.
-- **Network:** real USDC via Coinbase CDP facilitator
+- **Price:** `$0.05` USDC unless overridden by `X402_PRICE` as a positive integer in atomic micro-USDC units (`50000` = `$0.05`; 1 USDC = 1,000,000 units). Invalid, fractional, or non-finite values stop startup.
+- **Network:** production uses Base mainnet (`eip155:8453`) with the Coinbase CDP facilitator
 - **Backbone:** Claude Haiku 4.5 (deep + quick), debate rounds=1, risk rounds=1
 - **Live at:** https://tradingagents-x402.fly.dev
 

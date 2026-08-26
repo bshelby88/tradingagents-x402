@@ -6,6 +6,7 @@ const { paymentMiddleware } = require("@x402/express");
 const { x402ResourceServer, HTTPFacilitatorClient } = require("@x402/core/server");
 const { ExactEvmScheme } = require("@x402/evm/exact/server");
 const { declareDiscoveryExtension } = require("@x402/extensions/bazaar");
+const { configuredPrice } = require("./runtime-config");
 
 const PAY_TO = process.env.X402_PAY_TO;
 if (!PAY_TO) {
@@ -17,6 +18,7 @@ const TRADINGAGENTS_DIR = process.env.TRADINGAGENTS_DIR || "/app/TradingAgents";
 const PYTHON = process.env.PYTHON_BIN || "python3";
 const ANALYZE_SCRIPT = process.env.ANALYZE_SCRIPT || "/app/analyze.py";
 const ANALYSIS_TIMEOUT_MS = Number(process.env.ANALYSIS_TIMEOUT_MS || 90000);
+const PRICE = configuredPrice(process.env.X402_PRICE);
 
 // CDP secret base64 hop
 if (process.env.CDP_API_KEY_SECRET_B64) {
@@ -195,14 +197,13 @@ app.get("/health", (_req, res) =>
   }),
 );
 
-const PRICE = process.env.X402_PRICE ? `$${(Number(process.env.X402_PRICE) / 1000000).toFixed(2)}` : "$0.05";
-
 require("./public-discovery").registerPublicDiscovery(app, {
   name: "TradingAgents x402",
   summary: "Run a multi-agent ticker analysis and receive a structured research consensus.",
   baseUrl: "https://tradingagents-x402.fly.dev",
   endpoint: "/api/analyze-ticker",
   price: PRICE,
+  network: NETWORK,
   audience: "research agents that need a structured second opinion on a public-market ticker",
   disclaimer: "Research output only; not financial advice. Review the sources and assumptions.",
   homepage: false,
