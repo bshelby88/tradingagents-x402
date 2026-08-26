@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node test_docs_current.js && node test_toon.js && node test_fleet_health_workflow.js && node --test --test-concurrency=1 test_runtime_config.js test_public_discovery.js test_public_surfaces.js test_startup.js test_landing_page.js test_truthful_output.js test_customer_surfaces.js test_prepayment_validation.js"
+    "test": "node test_docs_current.js && node test_toon.js && node test_fleet_health_workflow.js && node --test --test-concurrency=1 test_runtime_config.js test_public_discovery.js test_public_surfaces.js test_startup.js test_landing_page.js test_truthful_output.js test_customer_surfaces.js test_prepayment_validation.js test_buyer_docs_sample.js"
   },
   "license": "ISC",
   "dependencies": {
