@@ -15,17 +15,16 @@ jobs:
         run: |
           set -uo pipefail
           declare -a ENTRIES=(
-            "sentry-forge-x402   /api/dispute-pack       500000 common"
-            "nanobanana-x402     /api/generate-image      10000 common"
-            "vault-pro-x402      /api/scaffold-project    50000 common"
-            "power-pack-x402     /api/score-email         10000 common"
-            "suprapack-x402      /api/find-skill          30000 0x7861db4efc14a1ed5dd8c96c528a3796560f1393"
-            "tradingagents-x402  /api/analyze-ticker      50000 common"
-            "nft-alpha-x402      /api/nft-signal          20000 common"
+            "sentry-forge-x402   /api/dispute-pack       500000 0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770"
+            "nanobanana-x402     /api/generate-image      10000 0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f"
+            "vault-pro-x402      /api/scaffold-project    50000 0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770"
+            "power-pack-x402     /api/score-email         10000 0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770"
+            "suprapack-x402      /api/find-skill          30000 0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f"
+            "tradingagents-x402  /api/analyze-ticker      50000 0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770"
+            "nft-alpha-x402      /api/nft-signal          20000 0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770"
           )
 
           FAIL=0
-          COMMON_PAYTO=""
           TMP_DIR="$(mktemp -d)"
           trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -33,7 +32,7 @@ jobs:
             read -r app endpoint expected_amount expected_payto <<< "$entry"
             base="https://$app.fly.dev"
 
-            health=$(curl -sS -m 30 -o /dev/null -w '%{http_code}' "$base/health" || echo ERR)
+            health=$(curl --retry 3 --retry-all-errors --retry-delay 2 -sS -m 30 -o /dev/null -w '%{http_code}' "$base/health" || echo ERR)
             if [ "$health" != "200" ]; then
               echo "::error::$app health=$health"
               FAIL=1
@@ -41,7 +40,7 @@ jobs:
             fi
 
             headers="$TMP_DIR/$app.headers"
-            status=$(curl -sS -m 30 -D "$headers" -o /dev/null -w '%{http_code}' \
+            status=$(curl --retry 3 --retry-all-errors --retry-delay 2 -sS -m 30 -D "$headers" -o /dev/null -w '%{http_code}' \
               -X POST "$base$endpoint" \
               -H 'content-type: application/json' \
               -d '{}')
@@ -87,15 +86,7 @@ jobs:
               continue
             fi
 
-            if [ "$expected_payto" = "common" ]; then
-              if [ -z "$COMMON_PAYTO" ]; then
-                COMMON_PAYTO="${payto,,}"
-              elif [ "${payto,,}" != "$COMMON_PAYTO" ]; then
-                echo "::error::$app payTo differs from fleet treasury"
-                FAIL=1
-                continue
-              fi
-            elif [ "${payto,,}" != "${expected_payto,,}" ]; then
+            if [ "${payto,,}" != "${expected_payto,,}" ]; then
               echo "::error::$app payTo differs from expected service wallet"
               FAIL=1
               continue
