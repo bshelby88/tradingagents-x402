@@ -14,14 +14,21 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          CANON=0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393
           declare -a ENTRIES=(
-            "sentry-forge-x402   /api/dispute-pack      5000000 0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f"
-            "nanobanana-x402     /api/generate-image      10000 0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f"
-            "vault-pro-x402      /api/scaffold-project    50000 0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f"
-            "power-pack-x402     /api/score-email         10000 0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f"
-            "suprapack-x402      /api/find-skill          30000 0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f"
-            "tradingagents-x402  /api/analyze-ticker      50000 0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770"
-            "nft-alpha-x402      /api/nft-signal          20000 0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770"
+            "sentry-forge-x402    /api/dispute-pack        5000000"
+            "dispute-forge-x402   /api/dispute-pack        7500000"
+            "nanobanana-x402      /api/generate-image        10000"
+            "vault-pro-x402       /api/scaffold-project       50000"
+            "power-pack-x402      /api/score-email            10000"
+            "suprapack-x402       /api/find-skill             30000"
+            "tradingagents-x402   /api/analyze-ticker         50000"
+            "nft-alpha-x402       /api/nft-signal             20000"
+            "lingua-x402          /api/translate            1000000"
+            "briefsnap-x402       /api/summarize            1000000"
+            "contract-eye-x402    /api/analyze-contract       50000"
+            "royal-ruby-x402      /api/law-lookup             50000"
+            "royal-feel-x402      /api/lint-copy            2000000"
           )
 
           FAIL=0
@@ -29,13 +36,13 @@ jobs:
           trap 'rm -rf "$TMP_DIR"' EXIT
 
           for entry in "${ENTRIES[@]}"; do
-            read -r app endpoint expected_amount expected_payto <<< "$entry"
+            read -r app endpoint expected_amount <<< "$entry"
             base="https://$app.fly.dev"
 
             # Request schemas are validated before x402 payment middleware.
             # Use harmless, schema-valid synthetic data so probes reach the 402 challenge.
             case "$app" in
-              sentry-forge-x402)
+              sentry-forge-x402|dispute-forge-x402)
                 request_body='{"customer_name":"Synthetic Health Probe","state":"LA","contract_type":"credit_card","default_date":"2026-01-01","alleged_balance":100,"narrative":"Synthetic monitoring request","collector_letter":"Synthetic collection notice"}' ;;
               nanobanana-x402)
                 request_body='{"prompt":"synthetic health-check image"}' ;;
@@ -48,7 +55,17 @@ jobs:
               tradingagents-x402)
                 request_body='{"ticker":"NVDA"}' ;;
               nft-alpha-x402)
-                request_body='{}' ;;
+                request_body='{"collection":"azuki"}' ;;
+              lingua-x402)
+                request_body='{"text":"Synthetic health check sentence.","target":"es"}' ;;
+              briefsnap-x402)
+                request_body='{"text":"Synthetic health check document. It contains enough words to pass request validation and is never processed without payment."}' ;;
+              contract-eye-x402)
+                request_body='{"address":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"}' ;;
+              royal-ruby-x402)
+                request_body='{"query":"FCRA dispute timelines"}' ;;
+              royal-feel-x402)
+                request_body='{"copy":"Synthetic health-check copy for monitoring."}' ;;
               *)
                 echo "::error::No safe probe payload configured for $app"
                 FAIL=1
@@ -73,7 +90,8 @@ jobs:
               continue
             fi
 
-            challenge=$(awk 'BEGIN{IGNORECASE=1} /^payment-required:/ {sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); print; exit}' "$headers")
+            # Accept both legacy payment-required and current x-payment-required headers.
+            challenge=$(awk 'BEGIN{IGNORECASE=1} /^(x-)?payment-required:/ {sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); print; exit}' "$headers")
             if [ -z "$challenge" ]; then
               echo "::error::$app missing payment-required header"
               FAIL=1
@@ -108,9 +126,8 @@ jobs:
               FAIL=1
               continue
             fi
-
-            if [ "${payto,,}" != "${expected_payto,,}" ]; then
-              echo "::error::$app payTo differs from expected service wallet"
+            if [ "${payto,,}" != "${CANON,,}" ]; then
+              echo "::error::$app payTo=$payto differs from canonical wallet"
               FAIL=1
               continue
             fi
@@ -118,6 +135,7 @@ jobs:
             printf 'OK %-22s health=%s network=%s amount=%s\n' "$app" "$health" "$network" "$amount"
           done
 
+          # Negative control: receipt verifier must reject a forged receipt
           receipt=$(curl -sS -m 30 'https://tradingagents-x402.fly.dev/api/receipts/verify?receipt=%7B%7D' | jq -r '.valid')
           if [ "$receipt" != "false" ]; then
             echo "::error::tradingagents receipt verifier rejected its negative-control test"
@@ -128,4 +146,4 @@ jobs:
             echo "::error::Fleet health or x402 metadata drift detected"
             exit 1
           fi
-          echo "All 7 active x402 services passed health, challenge, pricing, network, and payTo checks."
+          echo "All 13 active x402 services passed health, challenge, pricing, network, and canonical-payTo checks."
