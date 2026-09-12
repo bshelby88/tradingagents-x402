@@ -6,20 +6,34 @@ const workflow = fs.readFileSync('.github/workflows/fleet-health.yml', 'utf8');
 assert.doesNotMatch(workflow, /-d '\{\}'/,
   'fleet probe must not send an empty object after request validation moved before payment');
 
+const CANON = '0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393';
+assert.match(workflow, new RegExp(`CANON=${CANON}`),
+  'workflow must define the canonical treasury wallet');
+
 const expectedEntries = [
-  ['sentry-forge-x402', '5000000', '0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f'],
-  ['nanobanana-x402', '10000', '0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f'],
-  ['vault-pro-x402', '50000', '0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f'],
-  ['power-pack-x402', '10000', '0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f'],
-  ['suprapack-x402', '30000', '0x9b8a2786a3df7a7837ccfc4e792e9eb90a36f72f'],
-  ['tradingagents-x402', '50000', '0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770'],
-  ['nft-alpha-x402', '20000', '0x9e6A0CE78Bb2915d0758cc6A1cE8eA77f1B71770'],
+  ['sentry-forge-x402', '5000000'],
+  ['dispute-forge-x402', '750000'],
+  ['nanobanana-x402', '10000'],
+  ['vault-pro-x402', '50000'],
+  ['power-pack-x402', '10000'],
+  ['suprapack-x402', '30000'],
+  ['tradingagents-x402', '30000'],
+  ['nft-alpha-x402', '20000'],
+  ['lingua-x402', '1000000'],
+  ['briefsnap-x402', '1000000'],
+  ['contract-eye-x402', '50000'],
+  ['royal-ruby-x402', '250000'],
+  ['royal-feel-x402', '2000000'],
 ];
-for (const [app, amount, payTo] of expectedEntries) {
-  assert.match(workflow, new RegExp(`${app}\\s+\\S+\\s+${amount}\\s+${payTo}`, 'i'),
-    `${app} must use its live price and payTo wallet`);
-  assert.match(workflow, new RegExp(`${app}\\)`), `${app} must have an explicit valid probe payload`);
+for (const [app, amount] of expectedEntries) {
+  assert.match(workflow, new RegExp(`${app}\\s+\\S+\\s+${amount}\\s+\\$CANON`),
+    `${app} must use its live price ${amount} and the canonical wallet`);
+  assert.match(workflow, new RegExp(`${app}[|)]`), `${app} must have an explicit valid probe payload`);
 }
+
+// live-schema probe fixes (verified against each service /openapi.json on 2026-09-12)
+assert.match(workflow, /"text":"Synthetic health check sentence\.","to":"es"/,
+  'lingua probe must use the live schema field "to", not "target"');
 
 assert.match(workflow, /-d "\$request_body"/,
   'the selected valid payload must be sent to the service');

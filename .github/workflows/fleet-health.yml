@@ -16,19 +16,19 @@ jobs:
           set -uo pipefail
           CANON=0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393
           declare -a ENTRIES=(
-            "sentry-forge-x402    /api/dispute-pack        500000"
-            "dispute-forge-x402   /api/dispute-pack        750000"
-            "nanobanana-x402      /api/generate-image        10000"
-            "vault-pro-x402       /api/scaffold-project       50000"
-            "power-pack-x402      /api/score-email            10000"
-            "suprapack-x402       /api/find-skill             30000"
-            "tradingagents-x402   /api/analyze-ticker         50000"
-            "nft-alpha-x402       /api/nft-signal             20000"
-            "lingua-x402          /api/translate            1000000"
-            "briefsnap-x402       /api/summarize            1000000"
-            "contract-eye-x402    /api/analyze-contract       50000"
-            "royal-ruby-x402      /api/law-lookup             50000"
-            "royal-feel-x402      /api/lint-copy            2000000"
+            "sentry-forge-x402    /api/dispute-pack        5000000 $CANON"
+            "dispute-forge-x402   /api/dispute-pack        750000 $CANON"
+            "nanobanana-x402      /api/generate-image        10000 $CANON"
+            "vault-pro-x402       /api/scaffold-project       50000 $CANON"
+            "power-pack-x402      /api/score-email            10000 $CANON"
+            "suprapack-x402       /api/find-skill             30000 $CANON"
+            "tradingagents-x402   /api/analyze-ticker         30000 $CANON"
+            "nft-alpha-x402       /api/nft-signal             20000 $CANON"
+            "lingua-x402          /api/translate            1000000 $CANON"
+            "briefsnap-x402       /api/summarize            1000000 $CANON"
+            "contract-eye-x402    /api/analyze-contract       50000 $CANON"
+            "royal-ruby-x402      /api/law-lookup            250000 $CANON"
+            "royal-feel-x402      /api/lint-copy            2000000 $CANON"
           )
 
           FAIL=0
@@ -36,7 +36,7 @@ jobs:
           trap 'rm -rf "$TMP_DIR"' EXIT
 
           for entry in "${ENTRIES[@]}"; do
-            read -r app endpoint expected_amount <<< "$entry"
+            read -r app endpoint expected_amount expected_wallet <<< "$entry"
             base="https://$app.fly.dev"
 
             # Request schemas are validated before x402 payment middleware.
@@ -57,7 +57,7 @@ jobs:
               nft-alpha-x402)
                 request_body='{"collection":"azuki"}' ;;
               lingua-x402)
-                request_body='{"text":"Synthetic health check sentence.","target":"es"}' ;;
+                request_body='{"text":"Synthetic health check sentence.","to":"es"}' ;;
               briefsnap-x402)
                 request_body='{"text":"Synthetic health check document. It contains enough words to pass request validation and is never processed without payment."}' ;;
               contract-eye-x402)
@@ -126,8 +126,8 @@ jobs:
               FAIL=1
               continue
             fi
-            if [ "${payto,,}" != "${CANON,,}" ]; then
-              echo "::error::$app payTo=$payto differs from canonical wallet"
+            if [ "${payto,,}" != "${expected_wallet,,}" ]; then
+              echo "::error::$app payTo=$payto differs from expected wallet $expected_wallet"
               FAIL=1
               continue
             fi

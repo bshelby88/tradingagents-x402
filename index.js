@@ -216,12 +216,13 @@ app.get("/health", (_req, res) =>
 
 require("./public-discovery").registerPublicDiscovery(app, {
   name: "TradingAgents x402",
-  summary: `Buy a synthetic degraded ticker demonstration payload. ${SYNTHETIC_DESCRIPTION}`,
+  summary: `Buy a synthetic, degraded demonstration payload. ${SYNTHETIC_DESCRIPTION}`,
   baseUrl: "https://tradingagents-x402.fly.dev",
   endpoint: "/api/analyze-ticker",
   price: PRICE,
   network: NETWORK,
   audience: "integrators evaluating the current x402 response shape, not buyers seeking live market research",
+  roles: CONFIGURED_ROLES,
   disclaimer: "Synthetic demonstration only; not financial advice or a live trading signal.",
   homepage: false,
 });
@@ -231,7 +232,7 @@ app.get("/about", (_req, res) =>
     service: "TradingAgents x402 — synthetic degraded ticker demonstration",
     operator: "Royal Agentic Enterprises",
     description:
-      `Pay ${PRICE} USDC per request for the current synthetic degraded demonstration payload. ${SYNTHETIC_DESCRIPTION} The response contains canned BUY/HOLD/SELL-shaped fields and must not be treated as market research.`,
+      `Pay ${PRICE} USDC per request for the current synthetic degraded demonstration payload. ${SYNTHETIC_DESCRIPTION} Configured report roles: ${CONFIGURED_ROLES.join(", ")}. The response contains canned BUY/HOLD/SELL-shaped fields and must not be treated as market research.`,
     docs: "https://github.com/TauricResearch/TradingAgents",
     contact: "jadedfocus@gmail.com",
   }),
@@ -397,6 +398,10 @@ const routesConfig = {
     inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
     outputSchema: ANALYZE_TICKER_OUTPUT_SCHEMA,
     extensions: {
+      "x-analysis-contract": {
+        inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
+        outputSchema: ANALYZE_TICKER_OUTPUT_SCHEMA,
+      },
       ...declareDiscoveryExtension({
         method: "POST",
         bodyType: "json",

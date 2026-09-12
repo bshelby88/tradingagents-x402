@@ -32,6 +32,7 @@ function registerPublicDiscovery(app, config) {
       `- Health: ${links.health}`,
     ];
     if (links.sample) lines.push(`- Free sample: ${links.sample}`);
+    if (config.roles && config.roles.length) lines.push(`- Configured report roles: ${config.roles.join(", ")}`);
     if (config.disclaimer) lines.push(`- Note: ${config.disclaimer}`);
     res.type("text/plain").send(`${lines.join("\n")}\n`);
   });
