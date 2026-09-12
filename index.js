@@ -34,7 +34,7 @@ if (process.env.CDP_API_KEY_SECRET_B64) {
 const HAS_CDP = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
 const NETWORK = HAS_CDP ? "eip155:8453" : "eip155:84532";
 const SYNTHETIC_DESCRIPTION =
-  "Current implementation returns a synthetic, degraded demonstration response; it does not execute TradingAgents or retrieve live market data. Configured synthetic report roles: market, social, news, fundamentals. The optional analysts array controls which synthetic role report fields are returned; it does not run those roles. No agent transcripts are produced.";
+  "Returns a synthetic degraded demo payload; no live market data or TradingAgents execution. Not financial advice.";
 
 let facilitatorClient;
 if (HAS_CDP) {
@@ -380,7 +380,7 @@ const routesConfig = {
       network: NETWORK,
       payTo: PAY_TO,
     },
-    description: `Price ${PRICE} USDC per request. Run BlockRun.ai-backed arbitrage market consensus. Body: { ticker: string }. Not financial advice.`,
+    description: `Price ${PRICE} USDC per request. BlockRun arbitrage market consensus for { ticker }. Not financial advice.`,
     mimeType: "application/json",
     inputSchema: ANALYZE_ARBITRAGE_INPUT_SCHEMA,
   },
@@ -392,15 +392,11 @@ const routesConfig = {
       payTo: PAY_TO,
     },
     description:
-      `Price ${PRICE} USDC per request. Return the current synthetic degraded ticker demonstration payload. Body: { ticker: string, date?: 'YYYY-MM-DD' (defaults to today), analysts?: string[] (default ['market','social','news','fundamentals']) }. ${SYNTHETIC_DESCRIPTION} Not financial advice.`,
+      `Price ${PRICE} USDC per request. Synthetic degraded ticker demo for { ticker, date?, analysts? }. ${SYNTHETIC_DESCRIPTION}`,
     mimeType: "application/json",
     inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
     outputSchema: ANALYZE_TICKER_OUTPUT_SCHEMA,
     extensions: {
-      "x-analysis-contract": {
-        inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
-        outputSchema: ANALYZE_TICKER_OUTPUT_SCHEMA,
-      },
       ...declareDiscoveryExtension({
         method: "POST",
         bodyType: "json",
