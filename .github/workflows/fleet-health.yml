@@ -16,7 +16,7 @@ jobs:
           set -uo pipefail
           CANON=0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393
           declare -a ENTRIES=(
-            "sentry-forge-x402    /api/dispute-pack        5000000 $CANON"
+            "sentry-forge-x402    /api/dispute-pack        500000 $CANON"
             "dispute-forge-x402   /api/dispute-pack        750000 $CANON"
             "nanobanana-x402      /api/generate-image        10000 $CANON"
             "vault-pro-x402       /api/scaffold-project       50000 $CANON"

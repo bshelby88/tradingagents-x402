@@ -44,7 +44,7 @@ test("each customer-facing surface independently states per-request billing", as
     env: {
       ...process.env,
       PORT: String(port),
-      X402_PAY_TO: "0x0000000000000000000000000000000000000001",
+      X402_PAY_TO: "0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393",
       X402_FACILITATOR_URL: "http://127.0.0.1:1",
       CDP_API_KEY_ID: "",
       CDP_API_KEY_SECRET: "",
