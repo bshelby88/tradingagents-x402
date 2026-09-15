@@ -15,10 +15,29 @@ const {
 } = require("./analysis-contract");
 
 const PAY_TO = process.env.X402_PAY_TO;
-if (!PAY_TO) {
-  console.error("FATAL: X402_PAY_TO env var required (Base USDC receive address)");
+// Canonical treasury assert (lingua-hardening pattern, POWER-PACK-BUY-1 /
+// ROYALRUBY-BUY-1 2026-09-15): a mis-set X402_PAY_TO silently misroutes every sale —
+// the presence-check alone let the 2026-09-15 fleet live-402 audit find seven walls
+// shipping the payer/test wallet 0xfbc0eb78 undetected. Tests boot with the canonical
+// treasury so this stays a single unconditional rule.
+if (!/^0x[a-fA-F0-9]{40}$/.test(PAY_TO || "") ||
+    PAY_TO.toLowerCase() !== "0x7861db4efc14a1ed5dd8c96c528a3796560f1393") {
+  console.error("FATAL: canonical X402_PAY_TO required");
   process.exit(1);
 }
+
+// x402 v2 challenges must name a facilitator: spec-following buyers look in
+// accepts[0].extra.facilitator (first), accepts[0].facilitator, then the doc root.
+// Without it a buyer cannot settle to RAE (2026-09-12 AgentPay report; fleet live 402
+// decode 2026-09-15T20:10Z on this service: extra carried only {name,version}, no
+// facilitator, no serviceName). x402.org/facilitator is NOT usable: its /supported
+// lists no eip155:8453 exact kind (probed 2026-09-15). AgentPay names Base-mainnet
+// exact (v1+v2); its /verify is free and open to any seller (operator-confirmed
+// 2026-09-12). Buyer-facing metadata only; server-side verify/settle still uses the
+// CDP facilitatorClient. Mirrors shipped fleet pattern: lingua a3d49da /
+// nft-alpha aa9c86c / dispute-forge a782277 / power-pack 36ee216 / royal-ruby b23de44.
+const FACILITATOR_URL = "https://x402-agent-pay.com/facilitator";
+const SERVICE_NAME = "tradingagents";
 
 const TRADINGAGENTS_DIR = process.env.TRADINGAGENTS_DIR || "/app/TradingAgents";
 const PYTHON = process.env.PYTHON_BIN || "python3";
@@ -139,7 +158,13 @@ function registerDiscoveryEndpoints(serverApp, routes, serviceInfo) {
       accepts: routeVal.accepts,
       description: routeVal.description,
       mimeType: routeVal.mimeType,
-      ...(routeVal.extensions ? { extensions: routeVal.extensions } : {})
+      // manifestOnlyExtensions stay server-side (/.well-known/x402.json + /openapi.json)
+      // and are deliberately NOT inlined into the 402 challenge header, which must fit
+      // under the 4 KB default proxy buffer (W1-3 header trim 2026-09-15; x-analysis-
+      // contract alone was 1,347 B in-band).
+      ...((routeVal.extensions || routeVal.manifestOnlyExtensions)
+        ? { extensions: { ...(routeVal.extensions || {}), ...(routeVal.manifestOnlyExtensions || {}) } }
+        : {})
     };
 
     const inputSchema = routeVal.inputSchema || {
@@ -380,7 +405,9 @@ const routesConfig = {
       price: PRICE,
       network: NETWORK,
       payTo: PAY_TO,
+      extra: { facilitator: FACILITATOR_URL },
     },
+    serviceName: SERVICE_NAME,
     description: `Price ${PRICE} USDC per request. BlockRun arbitrage market consensus for { ticker }. Not financial advice.`,
     mimeType: "application/json",
     inputSchema: ANALYZE_ARBITRAGE_INPUT_SCHEMA,
@@ -391,54 +418,37 @@ const routesConfig = {
       price: PRICE,
       network: NETWORK,
       payTo: PAY_TO,
+      extra: { facilitator: FACILITATOR_URL },
     },
+    serviceName: SERVICE_NAME,
     description:
       `Price ${PRICE} USDC per request. Synthetic degraded ticker demo for { ticker, date?, analysts? }. ${SYNTHETIC_DESCRIPTION}`,
     mimeType: "application/json",
     inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
     outputSchema: ANALYZE_TICKER_OUTPUT_SCHEMA,
-    extensions: {
+    // Server-side contract (exposed via /.well-known/x402.json, asserted by
+    // test_public_surfaces) — kept OUT of the in-band 402 challenge to hold the
+    // header under the 4 KB proxy buffer.
+    manifestOnlyExtensions: {
       "x-analysis-contract": {
         inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
         outputSchema: ANALYZE_TICKER_OUTPUT_SCHEMA,
       },
+    },
+    extensions: {
+      // Challenge header must stay under the 4 KB default proxy buffer
+      // (fleet-wide trim pattern POWER-PACK-BUY-1 / ROYALRUBY-BUY-1 2026-09-15;
+      // this wall was already at 3,956 B pre-fix). The in-band bazaar extension
+      // carries the INPUT schema/example only; the output schema+example remain
+      // server-side via /openapi.json and /.well-known/x402.json.
       ...declareDiscoveryExtension({
         method: "POST",
         bodyType: "json",
-        inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
         input: {
           ticker: "NVDA",
           analysts: ["market", "news", "fundamentals"],
         },
-        output: {
-          example: {
-            input: {
-              type: "http",
-              method: "POST",
-              bodyFields: {
-                ticker: "NVDA",
-                analysts: ["market", "news", "fundamentals"],
-              },
-            },
-            ok: true,
-            ticker: "NVDA",
-            date: "2026-05-15",
-            synthetic: true,
-            degraded: true,
-            decision: "BUY",
-            confidence: "high",
-            summary: "Synthetic degraded demonstration response for NVDA; no live market data or TradingAgents execution was used.",
-            configured_roles: ["market", "news", "fundamentals"],
-            reports: {
-              fundamentals: "Synthetic canned example; no issuer data was checked.",
-              news: "Synthetic canned example; no news sources were queried.",
-              technical: "Synthetic canned example; no price data was retrieved.",
-              trader_plan: "Synthetic canned example; not a trading signal.",
-              risk_review: "Synthetic canned example; no portfolio was analyzed.",
-            },
-          },
-          schema: ANALYZE_TICKER_OUTPUT_SCHEMA,
-        },
+        inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
       }),
     },
   },

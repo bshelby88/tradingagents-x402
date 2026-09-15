@@ -11,7 +11,7 @@ assert.match(workflow, new RegExp(`CANON=${CANON}`),
   'workflow must define the canonical treasury wallet');
 
 const expectedEntries = [
-  ['sentry-forge-x402', '5000000'],
+  ['sentry-forge-x402', '500000'],
   ['dispute-forge-x402', '750000'],
   ['nanobanana-x402', '10000'],
   ['vault-pro-x402', '50000'],
