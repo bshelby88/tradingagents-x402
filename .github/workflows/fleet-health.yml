@@ -22,7 +22,7 @@ jobs:
             "vault-pro-x402       /api/scaffold-project       50000 $CANON"
             "power-pack-x402      /api/score-email            10000 $CANON"
             "suprapack-x402       /api/find-skill             30000 $CANON"
-            "tradingagents-x402   /api/analyze-ticker         30000 $CANON"
+            "tradingagents-x402   /api/analyze-ticker         50000 $CANON"
             "nft-alpha-x402       /api/nft-signal             20000 $CANON"
             "lingua-x402          /api/translate            1000000 $CANON"
             "briefsnap-x402       /api/summarize            1000000 $CANON"
