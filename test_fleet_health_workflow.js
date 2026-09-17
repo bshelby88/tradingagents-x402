@@ -17,7 +17,7 @@ const expectedEntries = [
   ['vault-pro-x402', '50000'],
   ['power-pack-x402', '10000'],
   ['suprapack-x402', '30000'],
-  ['tradingagents-x402', '30000'],
+  ['tradingagents-x402', '50000'],
   ['nft-alpha-x402', '20000'],
   ['lingua-x402', '1000000'],
   ['briefsnap-x402', '1000000'],
