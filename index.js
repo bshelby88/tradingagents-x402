@@ -411,6 +411,17 @@ const routesConfig = {
     description: `Price ${PRICE} USDC per request. BlockRun arbitrage market consensus for { ticker }. Not financial advice.`,
     mimeType: "application/json",
     inputSchema: ANALYZE_ARBITRAGE_INPUT_SCHEMA,
+    // Bazaar discovery metadata (WR-20260918-HERMES-3): input schema/example
+    // in-band; keeps this route indexable with call metadata alongside
+    // /api/analyze-ticker (audit: route-2 was 0/1 bazaar-ext).
+    extensions: {
+      ...declareDiscoveryExtension({
+        method: "POST",
+        bodyType: "json",
+        inputSchema: ANALYZE_ARBITRAGE_INPUT_SCHEMA,
+        input: { ticker: "NVDA" },
+      }),
+    },
   },
   "POST /api/analyze-ticker": {
     accepts: {
