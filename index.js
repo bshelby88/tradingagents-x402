@@ -55,18 +55,14 @@ const NETWORK = HAS_CDP ? "eip155:8453" : "eip155:84532";
 const SYNTHETIC_DESCRIPTION =
   "Returns a synthetic degraded demo payload; no live market data or TradingAgents execution. Not financial advice.";
 
-let facilitatorClient;
-if (HAS_CDP) {
-  const { facilitator } = require("@coinbase/x402");
-  facilitatorClient = new HTTPFacilitatorClient(facilitator);
-  console.log("→ Coinbase CDP facilitator (Base mainnet, real USDC)");
-} else {
-  const facilitatorUrl = process.env.X402_FACILITATOR_URL || "https://x402.org/facilitator";
-  facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
-  console.log("→ public x402.org facilitator (Base Sepolia testnet — set CDP_API_KEY_ID/SECRET to switch to mainnet)");
-}
-
-const x402Server = new x402ResourceServer(facilitatorClient);
+// Server-side verify/settle MUST use the same canonical facilitator
+// advertised to buyers. Fleet live-402 audit 2026-09-25: walls
+// advertised x402-agent-pay.com to buyers but verified server-side
+// via Coinbase CDP facilitator (api.cdp.coinbase.com) — mismatch
+// caused valid payments to 402. Unify on canonical facilitator.
+const FACILITATOR_BASE = process.env.X402_FACILITATOR_URL || FACILITATOR_URL;
+facilitatorClient = new HTTPFacilitatorClient({ url: FACILITATOR_BASE });
+console.log(`→ using canonical facilitator {FACILITATOR_BASE} (Base mainnet)`);const x402Server = new x402ResourceServer(facilitatorClient);
 x402Server.register(NETWORK, new ExactEvmScheme());
 
 // Boot-resilient facilitator init (fix 2026-06-13): eager sync-on-start is disabled in
