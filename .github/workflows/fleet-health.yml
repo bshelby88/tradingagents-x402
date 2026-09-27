@@ -135,6 +135,45 @@ jobs:
             printf 'OK %-22s health=%s network=%s amount=%s\n' "$app" "$health" "$network" "$amount"
           done
 
+          # ──────────────────────────────────────────────────────────────────
+          # x402 manifest self-ping: GET /.well-known/x402.json from all 13
+          # active services to confirm discovery endpoints are reachable and
+          # return valid JSON manifests.
+          # ──────────────────────────────────────────────────────────────────
+          declare -a MANIFEST_APPS=(
+            briefsnap-x402
+            lingua-x402
+            royal-feel-x402
+            dispute-forge-x402
+            sentry-forge-x402
+            tradingagents-x402
+            royal-ruby-x402
+            vault-pro-x402
+            contract-eye-x402
+            suprapack-x402
+            nft-alpha-x402
+            nanobanana-x402
+            power-pack-x402
+          )
+
+          for app in "${MANIFEST_APPS[@]}"; do
+            base="https://$app.fly.dev"
+            manifest_status=$(curl --retry 3 --retry-all-errors --retry-delay 2 -sS -m 30 \
+              -o "$TMP_DIR/$app.manifest.json" -w '%{http_code}' \
+              "$base/.well-known/x402.json" || echo ERR)
+            if [ "$manifest_status" != "200" ]; then
+              echo "::error::$app /.well-known/x402.json returned $manifest_status"
+              FAIL=1
+              continue
+            fi
+            if ! jq -e '.accepts' "$TMP_DIR/$app.manifest.json" >/dev/null 2>&1; then
+              echo "::error::$app /.well-known/x402.json missing or invalid accepts field"
+              FAIL=1
+              continue
+            fi
+            printf 'MANIFEST OK %-22s status=%s\n' "$app" "$manifest_status"
+          done
+
           # Negative control: receipt verifier must reject a forged receipt
           receipt=$(curl -sS -m 30 'https://tradingagents-x402.fly.dev/api/receipts/verify?receipt=%7B%7D' | jq -r '.valid')
           if [ "$receipt" != "false" ]; then
