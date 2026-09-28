@@ -582,6 +582,124 @@ X-Payment: &lt;x402 payment&gt;
 
 app.get("/", (req, res) => res.type("html").send(landingHtml(req)));
 const ajv = new Ajv({ allErrors: true, strict: false });
+// ---------------------------------------------------------------------------
+// AGENSTRY-W1 cycle-9 replication (recO9y9mCEnExkp3W, 2026-09-28) — A2A v1.0
+// agent card + free JSON-RPC SendMessage surface for tradingagents-x402.
+// Exact shape validated on the eight A2A surfaces of this workstream (c6-c8).
+// Registered BEFORE the request-contract/facilitator/payment gates so free
+// JSON-RPC discovery never touches paid-route validation or the 402 gate.
+// Zero money paths touched: prices, network, payTo and facilitator are derived
+// from the authoritative routesConfig accepts objects — the card cannot drift
+// from the live gate. Truthfulness carried: the ticker route is a SYNTHETIC
+// degraded demonstration (never market research); the arbitrage route is a
+// BlockRun market-consensus readout; neither is financial advice.
+// ---------------------------------------------------------------------------
+function taCardUrl(req) {
+  // Production is TLS-only behind Fly; advertise https even on local http probes.
+  return `https://${req.get("host") || "tradingagents-x402.fly.dev"}/a2a`;
+}
+const taTickerAccepts = routesConfig["POST /api/analyze-ticker"].accepts;
+const taArbAccepts = routesConfig["POST /api/analyze-arbitrage"].accepts;
+function taAgentCard(req) {
+  return {
+    name: "TradingAgents — Ticker Consensus + Arbitrage Signals (RAEN x402)",
+    description: `Two paid x402 endpoints on ${taTickerAccepts.network}: POST /api/analyze-ticker (${taTickerAccepts.price} USDC) returns a SYNTHETIC degraded demonstration consensus report for { ticker, date?, analysts? } — canned BUY/HOLD/SELL-shaped fields, no live market data or TradingAgents execution, never market research; POST /api/analyze-arbitrage (${taArbAccepts.price} USDC) returns a BlockRun arbitrage market-consensus readout for { ticker }. Neither is financial advice. Pay per call via x402 — no API keys, no subscription. Free surfaces: GET /sample (synthetic output shape), GET /openapi.json, GET /docs, GET /pricing.md, GET /llms.txt, GET /about, GET /health, GET /.well-known/x402.json.`,
+    version: "1.0.0",
+    protocolVersion: "1.0",
+    url: taCardUrl(req),
+    supportedInterfaces: [{ url: taCardUrl(req), transport: "JSONRPC", protocolBinding: "JSONRPC", protocolVersion: "1.0" }],
+    preferredTransport: "JSONRPC",
+    provider: { organization: "Royal Agentic Enterprises", url: "https://tradingagents-x402.fly.dev" },
+    documentationUrl: "https://tradingagents-x402.fly.dev/pricing.md",
+    capabilities: {
+      streaming: false,
+      pushNotifications: false,
+      stateTransitionHistory: false,
+      extensions: [
+        { uri: "https://x402.org", description: `x402 v2 payment gating: USDC on ${taTickerAccepts.network}, scheme exact, ${taTickerAccepts.price} (/api/analyze-ticker) and ${taArbAccepts.price} (/api/analyze-arbitrage) per call, facilitator ${FACILITATOR_URL}, payTo treasury ${PAY_TO}. The live 402 challenge is authoritative.`, required: false },
+      ],
+    },
+    defaultInputModes: ["application/json", "text/plain"],
+    defaultOutputModes: ["application/json", "text/plain"],
+    skills: [
+      {
+        id: "ticker-consensus-guide",
+        name: "Paid synthetic ticker consensus guide",
+        description: `Explains how to buy POST /api/analyze-ticker (${taTickerAccepts.price} USDC on ${taTickerAccepts.network}): body { ticker (1-5 uppercase letters), date?, analysts? }; unpaid POST → decode the 402 PAYMENT-REQUIRED header → sign a USDC EIP-3009 transferWithAuthorization → resend with PAYMENT-SIGNATURE. Output is a SYNTHETIC degraded demonstration payload (canned multi-analyst shapes): no live market data, no TradingAgents execution, not market research, not financial advice.`,
+        tags: ["trading", "consensus", "synthetic", "demo", "x402", "usdc"],
+        examples: ["How do I pay for a multi-analyst ticker consensus demo response?"],
+      },
+      {
+        id: "arbitrage-signal-guide",
+        name: "Paid BlockRun arbitrage consensus guide",
+        description: `Explains how to buy POST /api/analyze-arbitrage (${taArbAccepts.price} USDC on ${taArbAccepts.network}): body { ticker }; returns a BlockRun arbitrage market-consensus readout. Not financial advice. Same x402 flow: unpaid POST → decode the 402 challenge → EIP-3009 transferWithAuthorization → PAYMENT-SIGNATURE.`,
+        tags: ["arbitrage", "blockrun", "signals", "x402", "usdc"],
+        examples: ["Can an agent buy an arbitrage consensus readout for NVDA?"],
+      },
+      {
+        id: "free-sample-preview",
+        name: "Free sample + schema preview",
+        description: "Points to the free validation surfaces before any payment: GET /sample returns the synthetic output shape, GET /openapi.json and GET /docs carry the full contracts, GET /pricing.md and GET /llms.txt describe endpoints and prices.",
+        tags: ["sample", "openapi", "free", "pricing", "preview"],
+        examples: ["Can I see the response shape before paying?"],
+      },
+      {
+        id: "machine-readable-surfaces",
+        name: "Machine-readable discovery surfaces",
+        description: "Guides agents to this wall's free machine surfaces: /pricing.md, /llms.txt, /openapi.json, /about, /.well-known/x402.json (live 402 accepts), /.well-known/agent-card.json (this card), POST /a2a (A2A v1 JSON-RPC).",
+        tags: ["discovery", "openapi", "x402", "a2a", "json"],
+        examples: ["Where is the machine-readable pricing manifest for this service?"],
+      },
+    ],
+    securitySchemes: {},
+    security: [],
+  };
+}
+function a2aTradingAgentsAnswer(lower) {
+  const base = `TradingAgents x402 (Royal Agentic Enterprises): POST /api/analyze-ticker (${taTickerAccepts.price} USDC on ${taTickerAccepts.network}) buys a SYNTHETIC degraded demonstration consensus report for { ticker, date?, analysts? } — canned multi-analyst shapes, no live market data or TradingAgents execution, never market research. POST /api/analyze-arbitrage (${taArbAccepts.price}) returns a BlockRun arbitrage market-consensus readout for { ticker }. Neither endpoint is financial advice. Buy flow: POST unpaid → decode the 402 challenge → sign a USDC EIP-3009 transferWithAuthorization → resend with PAYMENT-SIGNATURE; facilitator ${FACILITATOR_URL}; treasury ${PAY_TO}. Free before you pay: GET /sample (exact output shape), GET /openapi.json + /docs (contracts), GET /pricing.md, GET /.well-known/x402.json. The live 402 challenge is authoritative.`;
+  let extra = "";
+  if (/sample|preview|free|schema|openapi|docs/.test(lower)) extra = "\n\nNo payment needed to validate your pipeline: GET /sample returns the synthetic output shape and GET /openapi.json + GET /docs carry the full contracts.";
+  else if (/real|live|market data|trading agents|genuine/i.test(lower) && !/synthetic/.test(lower)) extra = "\n\nImportant honesty note: the ticker report is a SYNTHETIC degraded demonstration — canned BUY/HOLD/SELL-shaped fields with no live market data. Do not treat it as market research.";
+  else if (/arbitrage|blockrun/.test(lower)) extra = "\n\nThe arbitrage endpoint is a BlockRun market-consensus readout for a single { ticker } body — still not financial advice.";
+  else if (/pay|price|usdc|x402|signature|eip/.test(lower)) extra = "\n\nPayment is per call, no account: the 402 challenge names the exact amount, network, payTo and facilitator — sign a USDC EIP-3009 transferWithAuthorization and resend with the PAYMENT-SIGNATURE header.";
+  return base + extra;
+}
+app.get(["/.well-known/agent-card.json", "/.well-known/agent.json"], (req, res) => {
+  res.set("Cache-Control", "public, max-age=60");
+  res.json(taAgentCard(req));
+});
+app.post("/a2a", (req, res) => {
+  const b = req.body || {};
+  const id = b.id !== undefined ? b.id : null;
+  if (b.jsonrpc !== "2.0" || typeof b.method !== "string") {
+    return res.json({ jsonrpc: "2.0", id, error: { code: -32600, message: "Invalid Request: expected JSON-RPC 2.0 with a method string" } });
+  }
+  if (b.method === "SendMessage" || b.method === "message/send" || b.method === "tasks/send") {
+    // Wire-format negotiation by the method the caller used (validated on the
+    // eight A2A surfaces of this workstream before this replication): A2A v1.0
+    // SendMessage is protojson — result is the SendMessageResponse oneof
+    // wrapper {message:{...}} with role ROLE_AGENT and bare oneof parts
+    // ({"text":...}, no "kind"). v0.3 message/send/tasks/send keeps the flat
+    // kinded Message. Inbound parts are accepted in BOTH shapes.
+    const v1 = b.method === "SendMessage";
+    const userText = (((b.params || {}).message || {}).parts || [])
+      .filter((p) => p && typeof p.text === "string")
+      .map((p) => p.text).join(" ").slice(0, 500);
+    const answer = a2aTradingAgentsAnswer(userText.toLowerCase());
+    const metadata = { free: true, x402: { network: taTickerAccepts.network, price: taTickerAccepts.price, payTo: PAY_TO, facilitator: FACILITATOR_URL, manifest: "/.well-known/x402.json" } };
+    const messageId = `ta-${Date.now()}`;
+    const message = { messageId, role: "ROLE_AGENT", parts: [{ text: answer }], metadata };
+    const result = v1
+      ? { message }
+      : { kind: "message", role: "agent", messageId, parts: [{ kind: "text", text: answer }], metadata };
+    return res.json({ jsonrpc: "2.0", id, result });
+  }
+  if (b.method === "GetAgentCard") {
+    return res.json({ jsonrpc: "2.0", id, result: taAgentCard(req) });
+  }
+  return res.json({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found: supported are SendMessage (v1), message/send (v0.3), GetAgentCard" } });
+});
+
 const requestValidators = new Map(
   Object.entries(routesConfig).map(([routeKey, route]) => [routeKey, ajv.compile(route.inputSchema)]),
 );
