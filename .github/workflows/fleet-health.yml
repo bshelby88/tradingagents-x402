@@ -65,7 +65,7 @@ jobs:
               royal-ruby-x402)
                 request_body='{"query":"FCRA dispute timelines"}' ;;
               royal-feel-x402)
-                request_body='{"copy":"Synthetic health-check copy for monitoring."}' ;;
+                request_body='{"text":"Synthetic health-check copy for monitoring."}' ;;
               *)
                 echo "::error::No safe probe payload configured for $app"
                 FAIL=1
@@ -166,8 +166,17 @@ jobs:
               FAIL=1
               continue
             fi
-            if ! jq -e '.accepts' "$TMP_DIR/$app.manifest.json" >/dev/null 2>&1; then
-              echo "::error::$app /.well-known/x402.json missing or invalid accepts field"
+            # Manifests publish `accepts` per endpoint (`.endpoints["/path"].accepts`);
+            # a root-level `.accepts` (array or object) is also tolerated. Every
+            # accepts block must pay the canonical treasury on Base mainnet.
+            if ! jq -e --arg canon "$CANON" '
+                ((if (.accepts|type)=="array" then .accepts elif .accepts then [.accepts] else [] end)
+                 + [ (.endpoints // {}) | .[] | .accepts? // empty ]) as $acc
+                | ($acc|length) > 0
+                  and all($acc[]; ((.payTo // "") | ascii_downcase) == ($canon|ascii_downcase))
+                  and all($acc[]; (.network // "") == "eip155:8453")
+              ' "$TMP_DIR/$app.manifest.json" >/dev/null 2>&1; then
+              echo "::error::$app /.well-known/x402.json: no accepts block, or payTo/network not canonical (expect $CANON on eip155:8453)"
               FAIL=1
               continue
             fi
