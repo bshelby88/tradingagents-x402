@@ -65,7 +65,7 @@ jobs:
               royal-ruby-x402)
                 request_body='{"query":"FCRA dispute timelines"}' ;;
               royal-feel-x402)
-                request_body='{"copy":"Synthetic health-check copy for monitoring."}' ;;
+                request_body='{"text":"Synthetic health-check copy for monitoring."}' ;;
               *)
                 echo "::error::No safe probe payload configured for $app"
                 FAIL=1
