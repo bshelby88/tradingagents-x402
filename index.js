@@ -705,7 +705,12 @@ const requestValidators = new Map(
 );
 app.use((req, res, next) => {
   const validate = requestValidators.get(`${req.method} ${req.path}`);
-  if (!validate || validate(req.body)) return next();
+  // Bazaar/CDP discovery probes the paid route with an EMPTY body and requires
+  // 402 + challenge, not 400. Only enforce schema errors on requests that are
+  // actually attempting payment (carry a PAYMENT-SIGNATURE); everything else
+  // falls through to paymentMiddleware below, which emits the canonical 402.
+  if (!validate || !req.headers["payment-signature"]) return next();
+  if (validate(req.body)) return next();
   return res.status(400).json({
     ok: false,
     error: "request body does not match the published schema",
