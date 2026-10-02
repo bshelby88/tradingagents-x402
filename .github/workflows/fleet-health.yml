@@ -72,7 +72,16 @@ jobs:
                 continue ;;
             esac
 
-            health=$(curl --retry 3 --retry-all-errors --retry-delay 2 -sS -m 30 -o /dev/null -w '%{http_code}' "$base/health" || echo ERR)
+            # Cold-boot tolerant: Fly apps with autostop can refuse the first
+            # few requests while waking. Probe up to 4 times with backoff before
+            # declaring the wall down (root cause of 2026-10-02 11:33 UTC flake:
+            # sentry-forge-x402 health=ERR while its manifest 200'd seconds later).
+            health=ERR
+            for wake_attempt in 1 2 3 4; do
+              health=$(curl --retry 3 --retry-all-errors --retry-delay 2 -sS -m 30 -o /dev/null -w '%{http_code}' "$base/health" || echo ERR)
+              [ "$health" = "200" ] && break
+              sleep 5
+            done
             if [ "$health" != "200" ]; then
               echo "::error::$app health=$health"
               FAIL=1
