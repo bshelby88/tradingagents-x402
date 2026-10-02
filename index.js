@@ -708,7 +708,7 @@ app.use((req, res, next) => {
   // Bazaar/CDP discovery probes the paid route with an EMPTY body and requires
   // 402 + challenge, not 400. Non-empty bodies (even unpaid) SHOULD still be
   // validated so that malformed requests fail fast with a schema error.
-  const isEmpty = !req.body || (typeof req.body === "object" && Object.keys(req.body).length === 0);
+  const isEmpty = req.body === undefined;
   if (!validate || (!req.headers["payment-signature"] && isEmpty)) return next();
   if (validate(req.body)) return next();
   return res.status(400).json({
