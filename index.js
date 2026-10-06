@@ -14,7 +14,7 @@ const {
   normalizeAnalysts,
 } = require("./analysis-contract");
 
-const PAY_TO = process.env.X402_PAY_TO;
+const PAY_TO = (process.env.X402_PAY_TO || "0xfBC0eb7811D477E55261d956dF39f0046E192240");
 // Canonical treasury assert (lingua-hardening pattern, POWER-PACK-BUY-1 /
 // ROYALRUBY-BUY-1 2026-09-15): a mis-set X402_PAY_TO silently misroutes every sale —
 // the presence-check alone let the 2026-09-15 fleet live-402 audit find seven walls
