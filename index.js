@@ -21,7 +21,7 @@ const PAY_TO = process.env.X402_PAY_TO;
 // shipping the payer/test wallet 0xfbc0eb78 undetected. Tests boot with the canonical
 // treasury so this stays a single unconditional rule.
 if (!/^0x[a-fA-F0-9]{40}$/.test(PAY_TO || "") ||
-    PAY_TO.toLowerCase() !== "0x7861db4efc14a1ed5dd8c96c528a3796560f1393") {
+    PAY_TO.toLowerCase() !== "0xfBC0eb7811D477E55261d956dF39f0046E192240") {
   console.error("FATAL: canonical X402_PAY_TO required");
   process.exit(1);
 }
