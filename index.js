@@ -14,14 +14,14 @@ const {
   normalizeAnalysts,
 } = require("./analysis-contract");
 
-const PAY_TO = "0xfbc0eb7811d477e55261d956df39f0046e192240";
+const PAY_TO = "0x7861db4efc14a1ed5dd8c96c528a3796560f1393";
 // Canonical treasury assert (lingua-hardening pattern, POWER-PACK-BUY-1 /
 // ROYALRUBY-BUY-1 2026-09-15): a mis-set X402_PAY_TO silently misroutes every sale —
 // the presence-check alone let the 2026-09-15 fleet live-402 audit find seven walls
 // shipping the payer/test wallet 0xfbc0eb78 undetected. Tests boot with the canonical
 // treasury so this stays a single unconditional rule.
 if (!/^0x[a-fA-F0-9]{40}$/.test(PAY_TO || "") ||
-    PAY_TO.toLowerCase() !== "0xfbc0eb7811d477e55261d956df39f0046e192240") {
+    PAY_TO.toLowerCase() !== "0x7861db4efc14a1ed5dd8c96c528a3796560f1393") {
   console.error("FATAL: canonical X402_PAY_TO required");
   process.exit(1);
 }
