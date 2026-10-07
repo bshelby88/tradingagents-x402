@@ -5,7 +5,7 @@ primary_region = "dfw"
   dockerfile = "Dockerfile"
 
 [env]
-  X402_PAY_TO = "0xfBC0eb7811D477E55261d956dF39f0046E192240"
+  X402_PAY_TO = "0x7861db4efc14a1ed5dd8c96c528a3796560f1393"
   PORT = "3000"
   TRADINGAGENTS_DIR = "/app/TradingAgents"
   PYTHON_BIN = "python3"
