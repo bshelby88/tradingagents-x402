@@ -115,7 +115,7 @@ for (const [route, body] of [
     assert.equal(d.accepts.length, 1);
     const acc = d.accepts[0];
     // Buyer lookup order: accepts[0].extra.facilitator, accepts[0].facilitator, root.
-    assert.equal(acc.extra.facilitator, "https://x402-agent-pay.com/facilitator");
+    assert.equal(acc.extra.facilitator, "https://facilitator-x402.fly.dev");
     assert.equal(acc.payTo.toLowerCase(), CANON.toLowerCase());
   });
 }
