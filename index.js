@@ -36,7 +36,7 @@ if (!/^0x[a-fA-F0-9]{40}$/.test(PAY_TO || "") ||
 // 2026-09-12). Buyer-facing metadata only; server-side verify/settle still uses the
 // CDP facilitatorClient. Mirrors shipped fleet pattern: lingua a3d49da /
 // nft-alpha aa9c86c / dispute-forge a782277 / power-pack 36ee216 / royal-ruby b23de44.
-const FACILITATOR_URL = "https://facilitator-x402.fly.dev";
+const FACILITATOR_URL = "https://raen-facilitator.fly.dev";
 const SERVICE_NAME = "tradingagents";
 
 const TRADINGAGENTS_DIR = process.env.TRADINGAGENTS_DIR || "/app/TradingAgents";
