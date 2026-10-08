@@ -175,13 +175,17 @@ jobs:
               FAIL=1
               continue
             fi
-            # Fleet manifest standard (verified live 2026-10-02, all 11 reachable walls):
-            # accepts is advertised PER-ENDPOINT under .endpoints[].accepts (v2.0.0 schema);
-            # some services may also mirror a top-level accepts. Fail only when NO accepts
-            # surface exists anywhere. Deep pricing/network/payTo validation is done above
-            # against the live 402 challenge, which is the payer-facing source of truth.
-            if ! jq -e '([.endpoints[]? | select(.accepts != null)] | length > 0) or (.accepts != null)' "$TMP_DIR/$app.manifest.json" >/dev/null 2>&1; then
-              echo "::error::$app /.well-known/x402.json missing or invalid accepts field"
+            # Manifests publish `accepts` per endpoint (`.endpoints["/path"].accepts`);
+            # a root-level `.accepts` (array or object) is also tolerated. Every
+            # accepts block must pay the canonical treasury on Base mainnet.
+            if ! jq -e --arg canon "$CANON" '
+                ((if (.accepts|type)=="array" then .accepts elif .accepts then [.accepts] else [] end)
+                 + [ (.endpoints // {}) | .[] | .accepts? // empty ]) as $acc
+                | ($acc|length) > 0
+                  and all($acc[]; ((.payTo // "") | ascii_downcase) == ($canon|ascii_downcase))
+                  and all($acc[]; (.network // "") == "eip155:8453")
+              ' "$TMP_DIR/$app.manifest.json" >/dev/null 2>&1; then
+              echo "::error::$app /.well-known/x402.json: no accepts block, or payTo/network not canonical (expect $CANON on eip155:8453)"
               FAIL=1
               continue
             fi
