@@ -19,7 +19,10 @@ const http = require("node:http");
 const path = require("node:path");
 
 const CANONICAL_TREASURY = "0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393";
-const DRAIN_ERA_WALLET = "0x7861db4efc14a1ed5dd8c96c528a3796560f1393";
+// The 2026-09-15 live-402 audit flagged seven walls shipping the old PAVER/test
+// wallet 0xfbc0eb78 undetected — THAT address is the drain-era wallet the card
+// must never name (the canonical treasury is asserted present above).
+const DRAIN_ERA_WALLET = "0xfbc0eb7811d477e55261d956df39f0046e192240";
 
 function freePort() {
   return new Promise((resolve, reject) => {
