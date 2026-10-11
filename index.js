@@ -404,7 +404,7 @@ const routesConfig = {
       extra: { facilitator: FACILITATOR_URL },
     },
     serviceName: SERVICE_NAME,
-    description: `Price ${PRICE} USDC per request. BlockRun arbitrage market consensus for { ticker }. Not financial advice.`,
+    description: `Request a synthetic BlockRun arbitrage-consensus demo for a ticker. POST {ticker}, receive a synthetic degraded payload; no live market data, not financial advice. $0.05 per call, Base USDC x402.`,
     mimeType: "application/json",
     inputSchema: ANALYZE_ARBITRAGE_INPUT_SCHEMA,
     // Bazaar discovery metadata (WR-20260918-HERMES-3): input schema/example
@@ -429,7 +429,7 @@ const routesConfig = {
     },
     serviceName: SERVICE_NAME,
     description:
-      `Price ${PRICE} USDC per request. Synthetic degraded ticker demo for { ticker, date?, analysts? }. ${SYNTHETIC_DESCRIPTION}`,
+      `Request a synthetic ticker market-consensus demo. POST {ticker, date?, analysts?}, receive a synthetic payload; no live market data, not financial advice. $0.05 per call, Base USDC x402.`,
     mimeType: "application/json",
     inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
     outputSchema: ANALYZE_TICKER_OUTPUT_SCHEMA,
