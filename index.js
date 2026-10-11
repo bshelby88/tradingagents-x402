@@ -738,7 +738,17 @@ app.use((req, res, next) => {
     return res.status(400).json({ ok: false, error: error.message });
   }
 });
-app.use(paymentMiddleware(routesConfig, x402Server, undefined, undefined, false));
+// EXEC-140 (2026-10-11): Bazaar validate_endpoint probes paid routes with
+// GET/HEAD; @x402/express >=2.23 matches routes by exact verb so "POST /api/x"
+// only gated POST and GET fell through to Express 404 ("returns_402 failed").
+// Gate every method: same config under exact POST keys (manifest contract
+// unchanged) plus "* " all-method aliases.
+const taGateRoutes = Object.fromEntries(
+  Object.entries(routesConfig).flatMap(([key, cfg]) =>
+    key.startsWith("POST ") ? [[key, cfg], [`*${key.slice(4)}`, cfg]] : [[key, cfg]],
+  ),
+);
+app.use(paymentMiddleware(taGateRoutes, x402Server, undefined, undefined, false));
 
 function runAnalyze({ ticker, date, analysts }) {
   return new Promise((resolve, reject) => {
