@@ -18,7 +18,7 @@ const net = require("node:net");
 const http = require("node:http");
 const path = require("node:path");
 
-const CANONICAL_TREASURY = "0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393";
+const CANONICAL_TREASURY = "0x9b8a27e03ceba490953cda8ab1291c0e13baf72f";
 // The 2026-09-15 live-402 audit flagged seven walls shipping the old PAVER/test
 // wallet 0xfbc0eb78 undetected — THAT address is the drain-era wallet the card
 // must never name (the canonical treasury is asserted present above).

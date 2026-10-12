@@ -39,7 +39,7 @@ test("GET / serves the buyer landing page with runtime payment details", async (
     env: {
       ...process.env,
       PORT: String(port),
-      X402_PAY_TO: "0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393",
+      X402_PAY_TO: "0x9b8a27e03ceba490953cda8ab1291c0e13baf72f",
       X402_PRICE: "125000",
       CDP_API_KEY_ID: "",
       CDP_API_KEY_SECRET: "",

@@ -6,7 +6,7 @@ const workflow = fs.readFileSync('.github/workflows/fleet-health.yml', 'utf8');
 assert.doesNotMatch(workflow, /-d '\{\}'/,
   'fleet probe must not send an empty object after request validation moved before payment');
 
-const CANON = '0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393';
+const CANON = '0x9b8a27e03ceba490953cda8ab1291c0e13baf72f';
 assert.match(workflow, new RegExp(`CANON=${CANON}`),
   'workflow must define the canonical treasury wallet');
 
