@@ -64,3 +64,7 @@ ISC for this wrapper. TradingAgents itself ships under its own license — see `
 ---
 
 Part of the [Royal Agentic x402 portfolio](https://bshelby88.github.io/x402-portfolio/) — seven paid x402 APIs on Base mainnet.
+
+## Delivery guard (2026-10-12)
+
+`POST /api/analyze-ticker` answers **503** (payment not settled) unless `TRADINGAGENTS_FORCE_REAL_ANALYSIS=1` is set **and** the analyzer returns non-synthetic output. The bundled `analyze.py` is synthetic, so the paid route does not sell it. `POST /api/analyze-arbitrage` answers 502 when upstream data is unavailable. Do not promote this service until a real analyzer is wired in.
