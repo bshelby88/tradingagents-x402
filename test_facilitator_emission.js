@@ -19,7 +19,7 @@ const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 
-const CANON = "0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393";
+const CANON = "0x9b8a27e03ceba490953cda8ab1291c0e13baf72f";
 
 function availablePort() {
   return new Promise((resolve, reject) => {

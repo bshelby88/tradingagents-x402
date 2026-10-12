@@ -14,7 +14,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          CANON=0x7861DB4EfC14A1ed5dd8C96c528A3796560F1393
+          CANON=0x9b8a27e03ceba490953cda8ab1291c0e13baf72f
           declare -a ENTRIES=(
             "sentry-forge-x402    /api/dispute-pack        5000000 $CANON"
             "dispute-forge-x402   /api/dispute-pack        750000 $CANON"
