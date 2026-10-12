@@ -4,6 +4,7 @@ const Ajv = require("ajv");
 const { toonMiddleware } = require("./toon_middleware");
 const { spawn } = require("node:child_process");
 const { paymentMiddleware } = require("@x402/express");
+const { createAnalyzeTickerHandler, createArbitrageHandler } = require("./delivery-guard");
 const { x402ResourceServer, HTTPFacilitatorClient } = require("@x402/core/server");
 const { ExactEvmScheme } = require("@x402/evm/exact/server");
 const { declareDiscoveryExtension } = require("@x402/extensions/bazaar");
@@ -817,45 +818,11 @@ app.use((req, res, next) => {
   next();
 });
 
-app.post("/api/analyze-ticker", async (req, res) => {
-  const { ticker, date } = req.body || {};
-  const configuredRoles = req.configuredRoles;
-  try {
-    const result = await runAnalyze({ ticker: ticker.toUpperCase(), date, analysts: configuredRoles });
-    const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
-    const cached = paymentSignature ? receipts.lookup(paymentSignature) : null;
-    if (cached) return res.json({ ok: true, replay: true, receipt: { payload: cached.payload, signature: receipts.record(paymentSignature, cached.response, RECEIPT_SECRET).signature }, ...cached.response });
-    const receipt = receipts.record(paymentSignature, result, RECEIPT_SECRET);
-    res.json({ ok: true, receipt, ...result });
-  } catch (e) {
-    console.error("analyze failure:", e.message);
-    const fallback = fallbackAnalysis({ ticker, date, analysts: configuredRoles }, e.message);
-    const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
-    const receipt = receipts.record(paymentSignature, fallback, RECEIPT_SECRET);
-    res.json({ ok: true, receipt, ...fallback });
-  }
-});
+app.post("/api/analyze-ticker", createAnalyzeTickerHandler({ runAnalyze, receipts, receiptSecret: RECEIPT_SECRET }));
 
 const { synthesizeMarketReport } = require("./blockrun-arbitrage");
 
-app.post("/api/analyze-arbitrage", async (req, res) => {
-  const { ticker } = req.body || {};
-
-  const paymentSignature = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
-  const cached = paymentSignature && receipts.lookup(paymentSignature);
-  if (cached) {
-    return res.json({ ok: true, replay: true, receipt: cached.receipt, ...cached.response });
-  }
-
-  try {
-    const result = await synthesizeMarketReport(ticker);
-    const receipt = paymentSignature ? receipts.record(paymentSignature, result.report || { error: result.error }, RECEIPT_SECRET) : undefined;
-    res.json({ ok: result.ok, receipt, ...(result.report || { error: result.error }) });
-  } catch (e) {
-    console.error("arbitrage failure:", e.message);
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
+app.post("/api/analyze-arbitrage", createArbitrageHandler({ synthesizeMarketReport, receipts, receiptSecret: RECEIPT_SECRET }));
 
 const PORT = Number(process.env.PORT) || 3000;
 app.get("/api/receipts/verify", (req, res) => {
