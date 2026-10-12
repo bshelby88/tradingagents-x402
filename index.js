@@ -20,8 +20,14 @@ const PAY_TO = process.env.X402_PAY_TO || "0x9b8a27e03ceba490953cda8ab1291c0e13b
 // the presence-check alone let the 2026-09-15 fleet live-402 audit find seven walls
 // shipping the payer/test wallet 0xfbc0eb78 undetected. Tests boot with the canonical
 // treasury so this stays a single unconditional rule.
+// Transition allowlist: new canonical treasury (Coinbase Wallet) plus the legacy treasury, so a
+// deploy never crash-loops while Fly secrets are flipped. Drop the legacy entry once all secrets move.
+const ALLOWED_PAY_TO = [
+  "0x9b8a27e03ceba490953cda8ab1291c0e13baf72f",
+  "0x7861db4efc14a1ed5dd8c96c528a3796560f1393",
+];
 if (!/^0x[a-fA-F0-9]{40}$/.test(PAY_TO || "") ||
-    PAY_TO.toLowerCase() !== "0x9b8a27e03ceba490953cda8ab1291c0e13baf72f") {
+    !ALLOWED_PAY_TO.includes(PAY_TO.toLowerCase())) {
   console.error("FATAL: canonical X402_PAY_TO required");
   process.exit(1);
 }
