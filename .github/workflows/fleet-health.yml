@@ -14,9 +14,12 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          # Canonical payTo (Bryant's Coinbase Wallet 0x9B8a...f72f). The legacy treasury
+          # 0x7861...1393 is still ACCEPTED during the migration window (warned, not failed);
+          # any other address fails. Remove LEGACY once every service advertises CANON.
           CANON=0x9b8a27e03ceba490953cda8ab1291c0e13baf72f
+          LEGACY=0x7861db4efc14a1ed5dd8c96c528a3796560f1393
           declare -a ENTRIES=(
-            "sentry-forge-x402    /api/dispute-pack        5000000 $CANON"
             "dispute-forge-x402   /api/dispute-pack        750000 $CANON"
             "nanobanana-x402      /api/generate-image        10000 $CANON"
             "vault-pro-x402       /api/scaffold-project       50000 $CANON"
@@ -24,11 +27,11 @@ jobs:
             "suprapack-x402       /api/find-skill             30000 $CANON"
             "tradingagents-x402   /api/analyze-ticker         50000 $CANON"
             "nft-alpha-x402       /api/nft-signal             20000 $CANON"
-            "lingua-x402          /api/translate            1000000 $CANON"
             "briefsnap-x402       /api/summarize            1000000 $CANON"
             "contract-eye-x402    /api/analyze-contract       50000 $CANON"
             "royal-ruby-x402      /api/law-lookup            250000 $CANON"
             "royal-feel-x402      /api/lint-copy            2000000 $CANON"
+            "dispatch-x402        /dispatch                  500000 $CANON"
           )
 
           FAIL=0
@@ -42,7 +45,7 @@ jobs:
             # Request schemas are validated before x402 payment middleware.
             # Use harmless, schema-valid synthetic data so probes reach the 402 challenge.
             case "$app" in
-              sentry-forge-x402|dispute-forge-x402)
+              dispute-forge-x402)
                 request_body='{"customer_name":"Synthetic Health Probe","state":"LA","contract_type":"credit_card","default_date":"2026-01-01","alleged_balance":100,"narrative":"Synthetic monitoring request","collector_letter":"Synthetic collection notice"}' ;;
               nanobanana-x402)
                 request_body='{"prompt":"synthetic health-check image"}' ;;
@@ -56,8 +59,6 @@ jobs:
                 request_body='{"ticker":"NVDA"}' ;;
               nft-alpha-x402)
                 request_body='{"collection":"azuki"}' ;;
-              lingua-x402)
-                request_body='{"text":"Synthetic health check sentence.","to":"es"}' ;;
               briefsnap-x402)
                 request_body='{"text":"Synthetic health check document. It contains enough words to pass request validation and is never processed without payment."}' ;;
               contract-eye-x402)
@@ -66,6 +67,8 @@ jobs:
                 request_body='{"query":"FCRA dispute timelines"}' ;;
               royal-feel-x402)
                 request_body='{"text":"Synthetic health-check copy for monitoring."}' ;;
+              dispatch-x402)
+                request_body='{"task":"synthetic health check"}' ;;
               *)
                 echo "::error::No safe probe payload configured for $app"
                 FAIL=1
@@ -75,7 +78,7 @@ jobs:
             # Cold-boot tolerant: Fly apps with autostop can refuse the first
             # few requests while waking. Probe up to 4 times with backoff before
             # declaring the wall down (root cause of 2026-10-02 11:33 UTC flake:
-            # sentry-forge-x402 health=ERR while its manifest 200'd seconds later).
+            # a suspended app health=ERR while its manifest 200'd seconds later).
             health=ERR
             for wake_attempt in 1 2 3 4; do
               health=$(curl --retry 3 --retry-all-errors --retry-delay 2 -sS -m 30 -o /dev/null -w '%{http_code}' "$base/health" || echo ERR)
@@ -135,8 +138,10 @@ jobs:
               FAIL=1
               continue
             fi
-            if [ "${payto,,}" != "${expected_wallet,,}" ]; then
-              echo "::error::$app payTo=$payto differs from expected wallet $expected_wallet"
+            if [ "${payto,,}" = "${LEGACY,,}" ]; then
+              echo "::warning::$app still advertises legacy payTo $LEGACY (accepted during transition)"
+            elif [ "${payto,,}" != "${expected_wallet,,}" ]; then
+              echo "::error::$app payTo=$payto is neither canonical $expected_wallet nor legacy $LEGACY"
               FAIL=1
               continue
             fi
@@ -145,16 +150,15 @@ jobs:
           done
 
           # ──────────────────────────────────────────────────────────────────
-          # x402 manifest self-ping: GET /.well-known/x402.json from all 13
-          # active services to confirm discovery endpoints are reachable and
+          # x402 manifest self-ping: GET /.well-known/x402.json from all active
+          # services to confirm discovery endpoints are reachable and
           # return valid JSON manifests.
           # ──────────────────────────────────────────────────────────────────
           declare -a MANIFEST_APPS=(
             briefsnap-x402
-            lingua-x402
             royal-feel-x402
+            dispatch-x402
             dispute-forge-x402
-            sentry-forge-x402
             tradingagents-x402
             royal-ruby-x402
             vault-pro-x402
@@ -178,14 +182,14 @@ jobs:
             # Manifests publish `accepts` per endpoint (`.endpoints["/path"].accepts`);
             # a root-level `.accepts` (array or object) is also tolerated. Every
             # accepts block must pay the canonical treasury on Base mainnet.
-            if ! jq -e --arg canon "$CANON" '
+            if ! jq -e --arg canon "$CANON" --arg legacy "$LEGACY" '
                 ((if (.accepts|type)=="array" then .accepts elif .accepts then [.accepts] else [] end)
                  + [ (.endpoints // {}) | .[] | .accepts? // empty ]) as $acc
                 | ($acc|length) > 0
-                  and all($acc[]; ((.payTo // "") | ascii_downcase) == ($canon|ascii_downcase))
+                  and all($acc[]; ((.payTo // "") | ascii_downcase) as $p | $p == ($canon|ascii_downcase) or $p == ($legacy|ascii_downcase))
                   and all($acc[]; (.network // "") == "eip155:8453")
               ' "$TMP_DIR/$app.manifest.json" >/dev/null 2>&1; then
-              echo "::error::$app /.well-known/x402.json: no accepts block, or payTo/network not canonical (expect $CANON on eip155:8453)"
+              echo "::error::$app /.well-known/x402.json: no accepts block, or payTo/network not allowed (expect $CANON or legacy $LEGACY on eip155:8453)"
               FAIL=1
               continue
             fi
@@ -203,4 +207,4 @@ jobs:
             echo "::error::Fleet health or x402 metadata drift detected"
             exit 1
           fi
-          echo "All 13 active x402 services passed health, challenge, pricing, network, and canonical-payTo checks."
+          echo "All active x402 services passed health, challenge, pricing, network, and allowed-payTo checks (canonical 0x9B8a, legacy 0x7861 tolerated)."
