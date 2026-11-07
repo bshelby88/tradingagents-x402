@@ -4,6 +4,55 @@ const { paymentMiddleware } = require("@x402/express");
 const { x402ResourceServer, HTTPFacilitatorClient } = require("@x402/core/server");
 const { ExactEvmScheme } = require("@x402/evm/exact/server");
 const { declareDiscoveryExtension } = require("@x402/extensions/bazaar");
+const crypto = require("crypto");
+
+// Simple in-memory receipt store
+function createReceiptStore(maxEntries = 5000) {
+  const map = new Map();
+  return {
+    lookup(nonce) {
+      return map.get(nonce);
+    },
+    record(nonce, response, secret) {
+      const responseJson = JSON.stringify(response);
+      const responseHash = crypto.createHash("sha256").update(responseJson).digest("hex");
+      const receipt = {
+        paymentNonce: nonce,
+        responseHash,
+        deliveredAt: new Date().toISOString(),
+        hmac: crypto
+          .createHmac("sha256", secret || "staci-dev")
+          .update(nonce + responseHash)
+          .digest("hex"),
+      };
+      map.set(nonce, { responseHash, response, receipt, ts: Date.now() });
+      if (map.size > maxEntries) {
+        const oldest = map.keys().next().value;
+        map.delete(oldest);
+      }
+      return receipt;
+    },
+    verify(receipt, secret) {
+      if (!receipt || !receipt.paymentNonce || !receipt.responseHash) return false;
+      const expect = crypto
+        .createHmac("sha256", secret || "staci-dev")
+        .update(receipt.paymentNonce + receipt.responseHash)
+        .digest("hex");
+      try {
+        return crypto.timingSafeEqual(Buffer.from(expect), Buffer.from(String(receipt.hmac || "")));
+      } catch {
+        return false;
+      }
+    },
+    size() {
+      return map.size;
+    },
+  };
+}
+
+const receipts = createReceiptStore();
+const RECEIPT_SECRET = process.env.RECEIPT_SECRET || "staci-dev";
+
 
 const PAY_TO = process.env.X402_PAY_TO;
 if (!PAY_TO) {
@@ -37,22 +86,30 @@ if (HAS_CDP) {
 const x402Server = new x402ResourceServer(facilitatorClient);
 x402Server.register(NETWORK, new ExactEvmScheme());
 
-// Boot-resilient facilitator init (fix 2026-06-13): eager sync-on-start is disabled in
-// paymentMiddleware (5th arg false); pre-warm supported-kinds here with retry/backoff so a
-// transient facilitator blip can never crash boot. Previously the eager initialize() promise
-// rejected unhandled -> Node exit 1 -> Fly restart loop -> machine death after 10 tries.
+let serverStarted = false;
+function startServer() {
+  if (serverStarted) return;
+  serverStarted = true;
+  const PORT = Number(process.env.PORT) || 3000;
+  app.listen(PORT, () => {
+    console.log(`tradingagents-x402 listening on :${PORT} (network=${NETWORK}, price=${PRICE})`);
+  });
+}
+
 (async () => {
   for (let i = 1; i <= 12; i++) {
     try {
       await x402Server.initialize();
       console.log(`→ x402 facilitator ready (attempt ${i})`);
+      startServer();
       return;
     } catch (e) {
       console.warn(`x402 facilitator init attempt ${i}/12 failed: ${e?.message || e}`);
       await new Promise((r) => setTimeout(r, Math.min(2000 * i, 15000)));
     }
   }
-  console.warn("x402 facilitator not ready after retries; will init lazily on first paid request");
+  console.warn("x402 facilitator not ready after retries; starting server anyway in degraded mode");
+  startServer();
 })();
 
 const app = express();
@@ -438,6 +495,17 @@ app.use((req, res, next) => {
   next();
 });
 
+// Verification route
+app.get("/api/receipts/verify", (req, res) => {
+  try {
+    const receipt = JSON.parse(req.query.receipt || "{}");
+    const valid = receipts.verify(receipt, RECEIPT_SECRET);
+    res.json({ valid });
+  } catch (e) {
+    res.json({ valid: false });
+  }
+});
+
 app.post("/api/analyze-ticker", async (req, res) => {
   const { ticker, date, analysts } = req.body || {};
   if (!ticker || typeof ticker !== "string" || !/^[A-Za-z0-9.\-]{1,10}$/.test(ticker)) {
@@ -449,19 +517,27 @@ app.post("/api/analyze-ticker", async (req, res) => {
   if (analysts && (!Array.isArray(analysts) || analysts.some((a) => typeof a !== "string"))) {
     return res.status(400).json({ ok: false, error: "analysts must be array of strings" });
   }
+
+  const nonce = req.get("PAYMENT-SIGNATURE") || req.get("X-Payment") || "";
+  const cached = nonce && receipts.lookup(nonce);
+  if (cached) {
+    return res.json({ ok: true, replay: true, receipt: cached.receipt, ...cached.response });
+  }
+
   try {
     const result = await runAnalyze({ ticker: ticker.toUpperCase(), date, analysts });
-    res.json({ ok: true, ...result });
+    const receipt = nonce ? receipts.record(nonce, result, RECEIPT_SECRET) : undefined;
+    res.json({ ok: true, receipt, ...result });
   } catch (e) {
     console.error("analyze failure:", e.message);
+    const fallback = fallbackAnalysis({ ticker, date, analysts }, e.message);
+    const receipt = nonce ? receipts.record(nonce, fallback, RECEIPT_SECRET) : undefined;
     res.json({
       ok: true,
-      ...fallbackAnalysis({ ticker, date, analysts }, e.message),
+      receipt,
+      ...fallback,
     });
   }
 });
 
-const PORT = Number(process.env.PORT) || 3000;
-app.listen(PORT, () => {
-  console.log(`tradingagents-x402 listening on :${PORT} (network=${NETWORK}, price=${PRICE})`);
-});
+// Server startup is handled by startServer() above once facilitator is initialized.
