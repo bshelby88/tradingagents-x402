@@ -26,7 +26,7 @@ function decodeSettlementReceipt(res) {
   return out;
 }
 
-module.exports = function settlementTelemetry({ service, priceMap = {} }) {
+module.exports = function settlementTelemetry({ service, priceMap = {}, variantOf = null }) {
   return function (req, res, next) {
     const start = Date.now();
     // x402 v2 uses PAYMENT-SIGNATURE; v1 used X-PAYMENT. Treat either as paid.
@@ -41,10 +41,15 @@ module.exports = function settlementTelemetry({ service, priceMap = {} }) {
       // read here would race and always miss it.
       setImmediate(() => {
         const { payer, tx } = event === "settled" ? decodeSettlementReceipt(res) : { payer: "", tx: "" };
+        // TRUTH FIX (Nov 11): a 200 on a paid request without an on-chain tx is
+        // NOT revenue. Report it as settled-unverified so the collector can
+        // exclude it from revenue totals.
+        if (event === "settled" && !tx) event = "settled-unverified";
         const body = {
           service, event,
           route: req.path.slice(0, 100),
           price_usd: priceMap[req.path] ?? null,
+          variant: typeof variantOf === "function" ? variantOf(req) : undefined,
           status: res.statusCode,
           error_class: error_class || null,
           latency_ms: Date.now() - start,
