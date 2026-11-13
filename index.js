@@ -754,6 +754,84 @@ const taGateRoutes = Object.fromEntries(
     key.startsWith("POST ") ? [[key, cfg], [`*${key.slice(4)}`, cfg]] : [[key, cfg]],
   ),
 );
+// STACI settlement telemetry (Nov 2026): funnel events -> settlement-collector
+app.use(require("./settlement-telemetry.cjs")({
+  service: "tradingagents",
+  priceMap: { "/api/analyze-ticker": 0.05, "/api/analyze-arbitrage": 0.05 },
+}));
+
+// [QUOTE-FIX] Third-party trust checkers (e.g. Lumi) and body-parsing agents read
+// the 402 BODY for price info. @x402/express returns an empty `{}` body and puts
+// the challenge only in the payment-required header. Enrich every 402: decode the
+// header challenge into the response body (single source of truth = the header).
+app.use((req, res, next) => {
+  const origEnd = res.end.bind(res);
+  res.end = function (chunk, encoding, cb) {
+    if (res.statusCode === 402) {
+      const text = chunk == null ? "" : String(chunk).trim();
+      const hasBody = text !== "" && text !== "{}";
+      const tok = res.getHeader("payment-required");
+      if (!hasBody && tok) {
+        try {
+          let b64 = String(tok).replace(/-/g, "+").replace(/_/g, "/");
+          while (b64.length % 4) b64 += "=";
+          const challenge = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+          const body = JSON.stringify(challenge);
+          if (!res.headersSent) {
+            if (!res.getHeader("content-type")) res.setHeader("content-type", "application/json");
+            const cl = res.getHeader("content-length");
+            if (cl) res.setHeader("content-length", Buffer.byteLength(body));
+          }
+          chunk = body;
+          if (typeof encoding === "function") { cb = encoding; encoding = undefined; }
+          else if (typeof chunk === "string" && encoding == null) encoding = "utf8";
+        } catch (_) { /* keep original body on any decode failure */ }
+      }
+    }
+    return origEnd(chunk, encoding, cb);
+  };
+  next();
+});
+
+// [QUOTE-FIX] GET on a paid route must return a machine-readable 402 quote, not a
+// 404 HTML "Cannot GET" (agents and trust checkers probe resources with GET first).
+// Registered BEFORE paymentMiddleware: never settles, never emits a challenge header.
+app.get("/api/analyze-arbitrage", (_req, res) => {
+  res.status(402).json({
+    ok: false,
+    error: "This x402 resource is paid and read via POST.",
+    quote: {
+      method: "POST",
+      path: "/api/analyze-arbitrage",
+      scheme: "exact",
+      price: "$0.05",
+      asset: "USDC",
+      network: "eip155:8453",
+      payTo: "0x9b8a27e03ceba490953cda8ab1291c0e13baf72f",
+    },
+    how_to_pay: "POST JSON (schema at /.well-known/x402.json) WITHOUT payment to receive the 402 challenge (payment-required header AND body), then resend with the PAYMENT-SIGNATURE header (x402 scheme 'exact', Base eip155:8453).",
+    manifest: "/.well-known/x402",
+  });
+});
+
+app.get("/api/analyze-ticker", (_req, res) => {
+  res.status(402).json({
+    ok: false,
+    error: "This x402 resource is paid and read via POST.",
+    quote: {
+      method: "POST",
+      path: "/api/analyze-ticker",
+      scheme: "exact",
+      price: "$0.05",
+      asset: "USDC",
+      network: "eip155:8453",
+      payTo: "0x9b8a27e03ceba490953cda8ab1291c0e13baf72f",
+    },
+    how_to_pay: "POST JSON (schema at /.well-known/x402.json) WITHOUT payment to receive the 402 challenge (payment-required header AND body), then resend with the PAYMENT-SIGNATURE header (x402 scheme 'exact', Base eip155:8453).",
+    manifest: "/.well-known/x402",
+  });
+});
+
 app.use(paymentMiddleware(taGateRoutes, x402Server, undefined, undefined, false));
 
 function runAnalyze({ ticker, date, analysts }) {
