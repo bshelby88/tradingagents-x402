@@ -794,6 +794,49 @@ app.use((req, res, next) => {
   next();
 });
 
+// [402-INSTRUCTIONS] Bean 2026-11-15 (TEN-PLANS Plan 1): every 402 body must tell
+// the buyer how to complete the settle -> retry -> claim flow. Root cause: the only
+// external payer settled on-chain and never retried - the 402 body told them nothing.
+// Registered BEFORE paymentMiddleware (and after the quote-fix header-decode wrapper)
+// so this res.end hook runs LAST on every 402, incl. the middleware's own emission.
+const PAYMENT_INSTRUCTIONS_402 = {
+  step_1: "Settle on-chain: send the exact USDC amount to payTo on eip155:8453 (EIP-3009 transferWithAuthorization, x402 'exact' scheme).",
+  step_2: "REPEAT your original request with header 'x-payment' set to the base64 settlement payload from your x402 client. You will then receive the paid response.",
+  already_settled: "If you already settled on-chain but never got your result, claim it at https://settlement-collector.fly.dev/storefront/claims with your tx hash.",
+  docs: "https://bshelby88.github.io/x402-cookbook/",
+};
+app.use((req, res, next) => {
+  const origEnd = res.end.bind(res);
+  res.end = function (chunk, encoding, cb) {
+    if (res.statusCode === 402) {
+      try {
+        let text = chunk == null ? "" : String(chunk).trim();
+        const tok = res.getHeader("payment-required");
+        if ((text === "" || text === "{}") && tok) {
+          let b64 = String(tok).replace(/-/g, "+").replace(/_/g, "/");
+          while (b64.length % 4) b64 += "=";
+          text = JSON.stringify(JSON.parse(Buffer.from(b64, "base64").toString("utf8")));
+        }
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && !parsed.payment_instructions) {
+          parsed.payment_instructions = PAYMENT_INSTRUCTIONS_402;
+          const body = JSON.stringify(parsed);
+          if (!res.headersSent) {
+            if (!res.getHeader("content-type")) res.setHeader("content-type", "application/json");
+            const cl = res.getHeader("content-length");
+            if (cl) res.setHeader("content-length", Buffer.byteLength(body));
+          }
+          chunk = body;
+          if (typeof encoding === "function") { cb = encoding; encoding = undefined; }
+          else if (encoding == null) encoding = "utf8";
+        }
+      } catch (_) { /* non-JSON or headerless 402: leave untouched */ }
+    }
+    return origEnd(chunk, encoding, cb);
+  };
+  next();
+});
+
 // [QUOTE-FIX] GET on a paid route must return a machine-readable 402 quote, not a
 // 404 HTML "Cannot GET" (agents and trust checkers probe resources with GET first).
 // Registered BEFORE paymentMiddleware: never settles, never emits a challenge header.
