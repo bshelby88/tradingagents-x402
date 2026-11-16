@@ -884,6 +884,44 @@ app.get("/api/analyze-ticker", (_req, res) => {
   });
 });
 
+// X-RAEN-CREDIT gate (Bean, 2026-11-16) — BEFORE paymentMiddleware. A prepaid
+// Market Intel Pack buyer ($29 via the settlement-collector storefront) redeems
+// here instead of paying per call. The collector is the credit authority:
+// POST /redeem burns the one-time credit. TRUTH: an invalid/exhausted credit
+// gets an explicit 402 body, never a silent paywall. Authority unreachable ->
+// fail safe to the normal x402 payment path.
+const CREDIT_AUTHORITY = process.env.CREDIT_AUTHORITY_URL || "https://settlement-collector.fly.dev";
+const CREDIT_ROUTES = ["/api/analyze-ticker"];
+const analyzeTickerHandler = createAnalyzeTickerHandler({ runAnalyze, receipts, receiptSecret: RECEIPT_SECRET });
+app.use(async (req, res, next) => {
+  const credit = String(req.headers["x-raen-credit"] || "").trim();
+  if (req.method !== "POST" || !credit || !CREDIT_ROUTES.includes(req.path)) return next();
+  try {
+    const r = await fetch(`${CREDIT_AUTHORITY}/storefront/credits/${encodeURIComponent(credit)}/redeem`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent_id: "tradingagents-credit-gate" }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.ok) {
+      console.log(`[CREDIT] redeemed ${credit} (${j.product_name || j.product}) for ${req.path}`);
+      res.set("X-RAEN-CREDIT-REDEEMED", credit);
+      return analyzeTickerHandler(req, res);
+    }
+    return res.status(402).json({
+      ok: false,
+      error: `X-RAEN-CREDIT rejected: ${j.error || `HTTP ${r.status}`}`,
+      credit: credit,
+      how_to_pay: "Pay per call via x402 instead: POST without this header to receive the 402 challenge, or purchase a pack at https://settlement-collector.fly.dev/storefront/catalog and redeem the delivered code.",
+      manifest: "/.well-known/x402",
+    });
+  } catch (e) {
+    console.error(`[CREDIT] authority error (${e.message}); falling back to x402`);
+    return next();
+  }
+});
+
 app.use(paymentMiddleware(taGateRoutes, x402Server, undefined, undefined, false));
 
 function runAnalyze({ ticker, date, analysts }) {
@@ -947,7 +985,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.post("/api/analyze-ticker", createAnalyzeTickerHandler({ runAnalyze, receipts, receiptSecret: RECEIPT_SECRET }));
+app.post("/api/analyze-ticker", analyzeTickerHandler);
 
 const { synthesizeMarketReport } = require("./blockrun-arbitrage");
 
