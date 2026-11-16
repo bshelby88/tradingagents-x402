@@ -21,6 +21,12 @@ primary_region = "dfw"
   min_machines_running = 1
   processes = ["app"]
 
+  # Real TradingAgents analysis runs 2-5 min (verified live: ~131s for 1 analyst).
+  # Fly Proxy kills idle connections at 60s by default — widen the idle window
+  # so a paid analysis can finish before the proxy cuts it (RE-AUDIT Nov 16).
+  [http_service.http_options]
+    idle_timeout = 600
+
   [http_service.concurrency]
     type = "requests"
     soft_limit = 4
