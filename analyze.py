@@ -88,7 +88,10 @@ def run_real_analysis(ticker: str, date: str, roles: list[str]) -> dict:
     config["results_dir"] = "/tmp/ta-results"
 
     graph = TradingAgentsGraph(selected_analysts=roles, config=config)
-    state = graph.propagate(ticker, date)
+    result = graph.propagate(ticker, date)
+    # propagate returns (final_state, processed_decision_signal)
+    state = result[0] if isinstance(result, tuple) else result
+    processed_signal = result[1] if isinstance(result, tuple) and len(result) > 1 else None
     if not state or not isinstance(state, dict):
         raise RuntimeError("engine returned no state")
 
@@ -107,7 +110,7 @@ def run_real_analysis(ticker: str, date: str, roles: list[str]) -> dict:
     if not final_decision:
         raise RuntimeError("engine returned empty final decision")
 
-    decisions = DECISION_RE.findall(final_decision)
+    decisions = DECISION_RE.findall(str(processed_signal) + " " + final_decision)
     decision = decisions[-1].upper() if decisions else "HOLD"
     conf_match = re.search(r"confidence[^A-Za-z0-9]*([A-Za-z]+)", final_decision, re.I)
     confidence = conf_match.group(1).lower() if conf_match else "unspecified"
