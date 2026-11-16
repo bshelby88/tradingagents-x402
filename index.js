@@ -4,7 +4,7 @@ const Ajv = require("ajv");
 const { toonMiddleware } = require("./toon_middleware");
 const { spawn } = require("node:child_process");
 const { paymentMiddleware } = require("@x402/express");
-const { createAnalyzeTickerHandler, createArbitrageHandler } = require("./delivery-guard");
+const { createAnalyzeTickerHandler, createArbitrageHandler, forceRealEnabled } = require("./delivery-guard");
 const { x402ResourceServer, HTTPFacilitatorClient } = require("@x402/core/server");
 const { ExactEvmScheme } = require("@x402/evm/exact/server");
 const { declareDiscoveryExtension } = require("@x402/extensions/bazaar");
@@ -60,7 +60,7 @@ if (process.env.CDP_API_KEY_SECRET_B64) {
 const HAS_CDP = Boolean(process.env.CDP_API_KEY_ID && process.env.CDP_API_KEY_SECRET);
 const NETWORK = HAS_CDP ? "eip155:8453" : "eip155:84532";
 const SYNTHETIC_DESCRIPTION =
-  "Returns a synthetic degraded demo payload; no live market data or TradingAgents execution. Not financial advice.";
+  "Without real mode enabled this route serves a synthetic degraded demo payload; when real mode is enabled it returns a live multi-agent TradingAgents report. Never financial advice.";
 
 // Server-side verify/settle MUST use the same canonical facilitator
 // advertised to buyers. Fleet live-402 audit 2026-09-25: walls
@@ -231,12 +231,20 @@ function registerDiscoveryEndpoints(serverApp, routes, serviceInfo) {
 }
 // --------------------------------------------------------------------------
 
+function outputMode() {
+  // Truthful mode label; /health must stay 200 in every mode (Fly probe path).
+  try {
+    if (forceRealEnabled() && Boolean(process.env.ANTHROPIC_API_KEY)) return "real";
+  } catch (_) { /* stay honest-degraded on any probing error */ }
+  return "synthetic-degraded";
+}
+
 app.get("/health", (_req, res) =>
   res.status(200).json({
     ok: true,
     status: "ok",
     service: "tradingagents-x402",
-    outputMode: "synthetic-degraded",
+    outputMode: outputMode(),
     configuredRoles: CONFIGURED_ROLES,
     facilitatorReady,
   }),
@@ -323,7 +331,7 @@ function analyzeTickerOutputSchema() {
       decision: { type: "string", enum: ["BUY", "HOLD", "SELL"] },
       confidence: { type: "string" },
       summary: { type: "string" },
-      synthetic: { type: "boolean", const: true },
+      synthetic: { type: "boolean" },
       degraded: { type: "boolean" },
       configured_roles: {
         type: "array",
@@ -436,7 +444,7 @@ const routesConfig = {
     },
     serviceName: SERVICE_NAME,
     description:
-      `Request a synthetic ticker market-consensus demo. POST {ticker, date?, analysts?}, receive a synthetic payload; no live market data, not financial advice. $0.05 per call, Base USDC x402.`,
+      `Request a ticker market-consensus report. POST {ticker, date?, analysts?}, receive a multi-agent TradingAgents report (real mode) or an honest 503 when real analysis is unavailable — synthetic output is never sold. Not financial advice. $0.05 per call, Base USDC x402.`,
     mimeType: "application/json",
     inputSchema: ANALYZE_TICKER_INPUT_SCHEMA,
     outputSchema: ANALYZE_TICKER_OUTPUT_SCHEMA,
@@ -512,7 +520,7 @@ function originOf(req) {
 function landingHtml(req) {
   const origin = originOf(req);
   const title = "TradingAgents x402 - Synthetic degraded ticker demonstration";
-  const desc = `Paid x402 endpoint. Pay ${PRICE} USDC per request on Base and POST /api/analyze-ticker for a synthetic degraded demonstration payload. No live market data or TradingAgents execution is used. Configured request roles: market, social, news, fundamentals. No agent transcripts are produced. Not financial advice.`;
+  const desc = `Paid x402 endpoint. Pay ${PRICE} USDC per request on Base and POST /api/analyze-ticker for a multi-agent TradingAgents consensus report (real mode) — when real analysis is unavailable the route answers 503 rather than serving the synthetic degraded demo. Configured request roles: market, social, news, fundamentals. Not financial advice.`;
   const favicon =
     "data:image/svg+xml," +
     encodeURIComponent(
