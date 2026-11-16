@@ -21,6 +21,8 @@ test("Docker runtime includes every service startup module", () => {
     "public-discovery.js",
     "runtime-config.js",
     "analysis-contract.js",
+    "delivery-guard.js",
+    "settlement-telemetry.cjs",
     "analyze.py",
     "blockrun-arbitrage.js",
   ]) {
@@ -86,6 +88,19 @@ test("paid route returns 503 until facilitator is ready and 402 afterward", asyn
   t.after(() => child.kill());
 
   await waitUntil(async () => (await fetch(`http://127.0.0.1:${port}/health`)).ok, "service did not start");
+
+  // Fly healthcheck target: GET /health must be 200 with an honest body even in
+  // synthetic mode and even while the facilitator is still initializing — the
+  // 503-unless-real rule applies only to PAID routes, never to the probe path.
+  // (Deploy incident 2026-11-15: machine never passed [http_service.checks] and
+  // the release was rolled back.)
+  const probe = await fetch(`http://127.0.0.1:${port}/health`);
+  assert.equal(probe.status, 200);
+  const probeBody = await probe.json();
+  assert.equal(probeBody.ok, true);
+  assert.equal(probeBody.outputMode, "synthetic-degraded");
+  assert.equal(probeBody.delivered, undefined, "probe must not claim a delivery");
+
   const cold = await fetch(`http://127.0.0.1:${port}/api/analyze-ticker`, {
     method: "POST",
     headers: { "content-type": "application/json" },
