@@ -589,6 +589,7 @@ X-Payment: &lt;x402 payment&gt;
     <li><a href="/openapi.json">OpenAPI 3.1 spec</a></li>
     <li><a href="/.well-known/x402">x402 well-known manifest</a></li>
     <li><a href="/about">About</a> &middot; <a href="/health">Health</a></li>
+    <li><a href="https://raen-api-docs.vercel.app/">Fleet API Docs (OpenAPI)</a> &middot; <a href="https://bshelby88.github.io/raen-postman/">Run in Postman</a></li>
   </ul>
   <p>Network: <code>${NETWORK}</code> &middot; Operator: Royal Agentic Enterprises</p>
   <p style="opacity:.7">Not financial advice. Synthetic degraded demonstration only; do not treat it as a trading signal.</p>
