@@ -500,6 +500,8 @@ function buyerDocsHtml() {
 <li><a href="/sample">Free synthetic sample</a></li>
 <li><a href="/openapi.json">OpenAPI contract</a></li>
 <li><a href="/.well-known/x402.json">x402 manifest</a></li>
+<li><a href="https://raen-api-docs.vercel.app/">Fleet API Docs (OpenAPI)</a></li>
+<li><a href="https://bshelby88.github.io/raen-postman/">Run in Postman</a></li>
 </ul></main></body></html>`;
 }
 
